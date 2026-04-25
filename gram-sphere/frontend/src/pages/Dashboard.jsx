@@ -3,6 +3,8 @@ import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
 import JobConnect from '../views/JobConnect';
 import Profile from '../views/Profile';
+import BazaarPulse from '../views/BazaarPulse';
+import GramLens from '../views/GramLens';
 
 const Dashboard = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -23,8 +25,14 @@ const Dashboard = () => {
         <main className="flex-1 relative bg-[#f3f4f6] overflow-hidden">
           {activeView === 'jobconnect' && <JobConnect />}
           {activeView === 'profile' && <Profile />}
+          {activeView === 'bazaarpulse' && <BazaarPulse />}
+          {activeView === 'gramlens' && <GramLens />}
+          
           {/* Mock empty states for other views */}
-          {activeView !== 'jobconnect' && activeView !== 'profile' && (
+          {activeView !== 'jobconnect' && 
+           activeView !== 'profile' && 
+           activeView !== 'bazaarpulse' && 
+           activeView !== 'gramlens' && (
             <div className="flex items-center justify-center h-full">
               <p className="text-gray-500">This view is not implemented yet.</p>
             </div>

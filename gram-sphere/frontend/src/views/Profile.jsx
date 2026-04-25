@@ -1,15 +1,19 @@
-import React, { useState } from 'react';
-import { Upload, CheckCircle, ShieldCheck, Image as ImageIcon, Video, Camera } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Upload, CheckCircle, ShieldCheck, Image as ImageIcon, Video, Camera, Loader2 } from 'lucide-react';
+import { getUser, updateUser, getSkillGap } from '../api';
+
+// Hardcoded user ID for now (would come from auth in production)
+const CURRENT_USER_ID = 'user_001';
 
 const Profile = () => {
   const [isEditing, setIsEditing] = useState(false);
-  const [userData, setUserData] = useState({
-    name: 'Raju Kumar',
-    role: 'Hardware & Network Technician',
-    location: 'Hubli, Karnataka'
-  });
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [showNewBadge, setShowNewBadge] = useState(false);
+  const [skillGapData, setSkillGapData] = useState(null);
 
   const mockSkills = [
     { name: 'Hardware Repair', level: 'Expert', verified: true },
@@ -17,19 +21,92 @@ const Profile = () => {
     { name: 'Customer Service', level: 'Advanced', verified: false },
   ];
 
-  const handleUpload = () => {
-    setIsUploading(true);
-    // Mock processing delay for Gemini Vision API
-    setTimeout(() => {
-      setIsUploading(false);
-      setShowNewBadge(true);
-    }, 3000);
+  // Fetch user data from backend on mount
+  useEffect(() => {
+    setLoading(true);
+    getUser(CURRENT_USER_ID)
+      .then((data) => {
+        setUserData({
+          name: data.name || 'Unknown',
+          role: data.role || 'youth',
+          trade: data.trade || '',
+          district: data.district || '',
+          location: data.district || '',
+          trustScore: data.trustScore || 0,
+          skillTokens: data.skillTokens || 0,
+        });
+        setError(null);
+      })
+      .catch((err) => {
+        console.error('Failed to load profile:', err);
+        setError(err.message);
+        // Fallback to defaults so the UI is still usable
+        setUserData({
+          name: 'User',
+          role: 'youth',
+          trade: '',
+          district: '',
+          location: '',
+          trustScore: 0,
+          skillTokens: 0,
+        });
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  // Fetch skill gap analysis after profile loads
+  useEffect(() => {
+    if (userData && userData.trade && userData.district) {
+      getSkillGap(userData.trade, [], userData.district, 'improve earnings')
+        .then(setSkillGapData)
+        .catch((err) => console.error('Skill gap fetch failed:', err));
+    }
+  }, [userData?.trade, userData?.district]);
+
+  const handleUpload = async () => {
+    // In a real app, we would use a file input. 
+    // Here we'll simulate picking a file for the sake of the demonstration.
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,video/*';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      setIsUploading(true);
+      try {
+        const res = await uploadProof(CURRENT_USER_ID, 'Handloom Weaving', file);
+        if (res.success) {
+          setShowNewBadge(true);
+          // Update local tokens
+          setUserData(prev => ({ ...prev, skillTokens: res.totalTokens }));
+          alert(res.message);
+        }
+      } catch (err) {
+        console.error('Upload failed:', err);
+        alert('Verification failed. Is the backend running?');
+      } finally {
+        setIsUploading(false);
+      }
+    };
+    input.click();
   };
 
-  const handleSave = () => {
-    setIsEditing(false);
-    console.log('Sending data to backend:', userData);
-    // Here you will later add your fetch/axios call to the backend
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateUser(CURRENT_USER_ID, {
+        name: userData.name,
+        role: userData.role,
+        location: userData.location,
+      });
+      setIsEditing(false);
+    } catch (err) {
+      console.error('Save failed:', err);
+      alert('Failed to save profile. Is the backend running?');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleChange = (e) => {
@@ -37,14 +114,30 @@ const Profile = () => {
     setUserData(prev => ({ ...prev, [name]: value }));
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="w-8 h-8 text-[#00875a] animate-spin" />
+        <span className="ml-3 text-gray-500 font-medium">Loading profile...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-[#f3f4f6]">
+      {/* Error Banner */}
+      {error && (
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 text-sm text-amber-800 font-medium">
+          Could not connect to backend: {error}. Showing offline data.
+        </div>
+      )}
+
       {/* Profile Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="h-32 bg-gradient-to-r from-[#00875a] to-emerald-400"></div>
         <div className="max-w-4xl mx-auto px-6 sm:px-8 pb-8 relative">
           <div className="absolute -top-12 border-4 border-white rounded-full w-24 h-24 bg-gray-200 flex items-center justify-center text-3xl shadow-sm overflow-hidden">
-            👨‍🔧
+            <span role="img" aria-label="avatar">&#128104;&#8205;&#128295;</span>
           </div>
           <div className="pt-14 flex flex-col sm:flex-row justify-between items-start gap-4">
             <div className="flex-1 w-full">
@@ -75,37 +168,50 @@ const Profile = () => {
               ) : (
                 <div>
                   <h1 className="text-2xl font-extrabold text-gray-900">{userData.name}</h1>
-                  <p className="text-gray-600 font-medium">{userData.role}</p>
+                  <p className="text-gray-600 font-medium">{userData.trade} ({userData.role})</p>
                   <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">
-                    📍 {userData.location}
+                    <span role="img" aria-label="pin">&#128205;</span> {userData.location || userData.district}
                   </p>
                 </div>
               )}
             </div>
-            <div className="flex gap-2">
-              {isEditing ? (
-                <>
+
+            {/* Trust Score + Skill Tokens Badges */}
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex gap-2">
+                <span className="bg-emerald-50 text-emerald-700 text-sm font-bold px-3 py-1.5 rounded-lg border border-emerald-200">
+                  Trust: {userData.trustScore}
+                </span>
+                <span className="bg-blue-50 text-blue-700 text-sm font-bold px-3 py-1.5 rounded-lg border border-blue-200">
+                  Tokens: {userData.skillTokens}
+                </span>
+              </div>
+              <div className="flex gap-2">
+                {isEditing ? (
+                  <>
+                    <button 
+                      onClick={handleSave}
+                      disabled={saving}
+                      className="bg-[#00875a] text-white font-bold px-6 py-2 rounded-full hover:bg-[#006b47] shadow-sm transition-colors disabled:opacity-50"
+                    >
+                      {saving ? 'Saving...' : 'Save Changes'}
+                    </button>
+                    <button 
+                      onClick={() => setIsEditing(false)}
+                      className="bg-white border border-gray-300 text-gray-700 font-bold px-4 py-2 rounded-full hover:bg-gray-50 shadow-sm transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
                   <button 
-                    onClick={handleSave}
-                    className="bg-[#00875a] text-white font-bold px-6 py-2 rounded-full hover:bg-[#006b47] shadow-sm transition-colors"
-                  >
-                    Save Changes
-                  </button>
-                  <button 
-                    onClick={() => setIsEditing(false)}
+                    onClick={() => setIsEditing(true)}
                     className="bg-white border border-gray-300 text-gray-700 font-bold px-4 py-2 rounded-full hover:bg-gray-50 shadow-sm transition-colors"
                   >
-                    Cancel
+                    Edit Profile
                   </button>
-                </>
-              ) : (
-                <button 
-                  onClick={() => setIsEditing(true)}
-                  className="bg-white border border-gray-300 text-gray-700 font-bold px-4 py-2 rounded-full hover:bg-gray-50 shadow-sm transition-colors"
-                >
-                  Edit Profile
-                </button>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -143,11 +249,35 @@ const Profile = () => {
                     <span className="font-bold text-gray-900">Mobile Screen Repair</span>
                     <CheckCircle className="w-4 h-4 text-blue-500" />
                   </div>
-                  <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded w-max border border-green-100">Newly Verified! ✨</span>
+                  <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded w-max border border-green-100">Newly Verified!</span>
                 </div>
               )}
             </div>
           </div>
+
+          {/* Skill Gap Recommendations (from AI) */}
+          {skillGapData && skillGapData.skill_gaps && (
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+              <h2 className="text-lg font-bold text-gray-900 mb-3">AI Skill Recommendations</h2>
+              <p className="text-xs text-gray-500 mb-3 font-medium">
+                {skillGapData.local_demand_context}
+              </p>
+              {skillGapData.top_skill_to_learn && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3">
+                  <span className="text-xs font-bold text-emerald-700">Top skill to learn:</span>
+                  <p className="text-sm font-semibold text-emerald-800 mt-0.5">{skillGapData.top_skill_to_learn}</p>
+                </div>
+              )}
+              <ul className="space-y-1">
+                {skillGapData.skill_gaps.map((gap, i) => (
+                  <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                    <span className="text-amber-500 mt-0.5">&#9679;</span>
+                    {gap}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         {/* Right Column: Work Proof Gallery */}

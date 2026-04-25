@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from router import skillflow, creditweb, bazaarpulse, gramlens
+from router import skillflow, creditweb, bazaarpulse, gramlens, users
 
 app = FastAPI(title="GramSphere API", version="1.0.0")
 
@@ -15,6 +15,7 @@ app.include_router(skillflow.router,   prefix="/api")
 app.include_router(creditweb.router,   prefix="/api")
 app.include_router(bazaarpulse.router, prefix="/api")
 app.include_router(gramlens.router,    prefix="/api")
+app.include_router(users.router,       prefix="/api")
 
 @app.get("/health")
 def health():
