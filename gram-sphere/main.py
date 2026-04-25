@@ -6,7 +6,7 @@ app = FastAPI(title="GramSphere API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],        # tighten this after hackathon
+    allow_origins=["*"],        
     allow_methods=["*"],
     allow_headers=["*"],
 )
