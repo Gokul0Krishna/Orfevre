@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mic, Search, ChevronRight, MapPin, Building, Briefcase, Filter, ArrowLeft, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
+import { Mic, Search, ChevronRight, MapPin, Building, Briefcase, Filter, ArrowLeft, CheckCircle2, Loader2, ShieldCheck, Network } from 'lucide-react';
 import { getGigs, getSkillGap } from '../api';
 import LiveVerificationModal from '../components/LiveVerificationModal';
 
@@ -121,7 +121,7 @@ const JobConnect = () => {
     };
 
     return (
-      <div className="flex flex-col h-full overflow-y-auto bg-[#f3f4f6]">
+      <div className="flex flex-col h-full overflow-y-auto bg-transparent">
         {/* Level 2 Verification Modal */}
         {applyingGig && (
           <LiveVerificationModal
@@ -134,19 +134,19 @@ const JobConnect = () => {
           />
         )}
         {/* Header Section */}
-        <div className="bg-white border-b border-gray-200 px-6 py-6 sticky top-0 z-10">
+        <div className="bg-white border-b border-gray-100 px-6 py-6 sticky top-0 z-10 shadow-sm">
           <div className="max-w-7xl mx-auto flex flex-col">
             <button 
               onClick={() => { setSelectedCategory(null); setAiResults(null); }}
-              className="text-gray-500 hover:text-gray-900 flex items-center gap-2 mb-4 w-max font-medium"
+              className="text-gray-500 hover:text-blue-600 flex items-center gap-2 mb-4 w-max font-medium transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
               Back to Categories
             </button>
-            <h1 className="text-2xl font-bold text-[#1e293b]">
+            <h1 className="text-2xl font-extrabold text-[#1D1C1D]">
               {selectedCategory.title} Gigs — {filteredGigs.length} Available
               {(statusFilter !== 'All' || tokenFilter !== 'Any') && (
-                <span className="ml-2 text-sm font-medium text-[#00875a] bg-green-50 border border-green-200 px-2 py-0.5 rounded-full align-middle">Filtered</span>
+                <span className="ml-3 text-xs font-bold text-[#007B55] bg-green-50 border border-green-200 px-2.5 py-1 rounded-full align-middle">Filtered</span>
               )}
             </h1>
           </div>
@@ -261,19 +261,19 @@ const JobConnect = () => {
               </div>
             )}
             {filteredGigs.map(gig => (
-              <div key={gig.id} className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition-shadow cursor-pointer group">
+              <div key={gig.id} className="bg-white border border-gray-100 rounded-[24px] p-6 hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all cursor-pointer group">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h2 className="text-lg font-bold text-gray-900 group-hover:text-[#00875a] transition-colors">{gig.title}</h2>
-                    <p className="text-gray-500 font-medium text-sm mt-0.5">Vendor: {gig.vendorId}</p>
+                    <h2 className="text-xl font-bold text-[#1D1C1D] group-hover:text-blue-600 transition-colors">{gig.title}</h2>
+                    <p className="text-gray-500 font-medium text-sm mt-1">Vendor: {gig.vendorId}</p>
                   </div>
                   {appliedGigs.has(gig.id) ? (
-                    <span className="flex items-center gap-1.5 bg-[#00875a] text-white text-xs font-bold px-3 py-1.5 rounded-full">
+                    <span className="flex items-center gap-1.5 bg-[#007B55] text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-sm">
                       <ShieldCheck className="w-3.5 h-3.5" />
                       Applied ✓
                     </span>
                   ) : (
-                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-[#00875a]" />
+                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600" />
                   )}
                 </div>
 
@@ -291,13 +291,13 @@ const JobConnect = () => {
                   {!appliedGigs.has(gig.id) ? (
                     <button
                       onClick={(e) => { e.stopPropagation(); setApplyingGig(gig); }}
-                      className="flex items-center gap-1.5 bg-[#00875a] hover:bg-[#006b47] text-white text-sm font-bold px-4 py-2 rounded-lg transition-colors shadow-sm"
+                      className="flex items-center gap-1.5 bg-[#007B55] hover:bg-[#006b47] text-white text-sm font-bold px-5 py-2.5 rounded-full transition-colors shadow-sm"
                     >
                       <ShieldCheck className="w-4 h-4" />
                       Apply (Verify Skill)
                     </button>
                   ) : (
-                    <span className="text-xs text-[#00875a] font-bold">Level 2 Verified ✓</span>
+                    <span className="text-xs text-[#007B55] font-bold">Level 2 Verified ✓</span>
                   )}
                 </div>
               </div>
@@ -310,11 +310,23 @@ const JobConnect = () => {
 
   // View 1: Categories Grid
   return (
-    <div className="flex flex-col h-full overflow-y-auto bg-[#f3f4f6]">
-      {/* Search Header */}
-      <div className="bg-white border-b border-gray-200 pt-10 pb-12 px-6 flex flex-col items-center">
-        <h1 className="text-3xl font-extrabold text-gray-900 mb-2">Find Local Gigs</h1>
-        <p className="text-gray-500 font-medium mb-8">Use your voice or type to discover opportunities</p>
+    <div className="flex flex-col h-full overflow-y-auto bg-transparent">
+      
+      {/* Contextual Banner & Header */}
+      <div className="px-6 pt-10 pb-4 flex flex-col items-center max-w-7xl mx-auto w-full">
+        <div className="flex items-center justify-center gap-3 mb-4">
+          <Network className="w-10 h-10 md:w-12 md:h-12 text-[#1E3A8A]" />
+          <h1 className="text-4xl md:text-[56px] font-extrabold tracking-tight">
+            <span className="text-[#1E3A8A]">JobConnect</span>
+            <span className="text-[#007B55]"> Network</span>
+          </h1>
+        </div>
+        <p className="text-gray-500 font-medium mb-8 text-lg text-center">Use your voice or type to discover opportunities near you</p>
+        
+        <div className="w-full h-32 md:h-48 rounded-[24px] overflow-hidden relative shadow-sm mb-6 border border-gray-200 bg-[#FAFAFA]">
+          <img src="/market.jpg" alt="JobConnect Market" className="w-full h-full object-cover mix-blend-multiply opacity-95" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div>
+        </div>
 
         {/* Error Banner */}
         {error && (
@@ -385,18 +397,18 @@ const JobConnect = () => {
               <button
                 key={category.id}
                 onClick={() => setSelectedCategory(category)}
-                className="bg-white border border-gray-200 rounded-xl p-5 flex items-center justify-between group hover:border-[#00875a] hover:shadow-md transition-all text-left"
+                className="bg-white border border-gray-100 rounded-[16px] p-6 flex items-center justify-between group hover:border-blue-300 hover:shadow-[0_8px_30px_rgba(0,0,0,0.06)] transition-all text-left"
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-gray-50 border border-gray-100 flex items-center justify-center text-xl">
+                  <div className="w-12 h-12 rounded-full bg-blue-50 border border-blue-100 flex items-center justify-center text-2xl shadow-sm">
                     {category.icon}
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-900 group-hover:text-[#00875a] transition-colors line-clamp-1">{category.title}</h3>
+                    <h3 className="font-bold text-[#1D1C1D] group-hover:text-blue-600 transition-colors line-clamp-1 text-lg">{category.title}</h3>
                     <p className="text-sm font-medium text-gray-500 mt-0.5">{category.openings} gig(s)</p>
                   </div>
                 </div>
-                <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-[#00875a] transition-colors" />
+                <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-blue-600 transition-colors" />
               </button>
             ))}
           </div>

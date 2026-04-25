@@ -32,7 +32,7 @@ const Header = ({ onOpenSidebar }) => {
   const currentLang = languages.find(l => l.code === i18n.language) || languages[0];
 
   return (
-    <header className="h-16 border-b border-gray-200 bg-white flex items-center justify-between px-4 md:px-6 sticky top-0 z-30 shadow-sm">
+    <header className="h-16 border-b border-gray-100 bg-white flex items-center justify-between px-4 md:px-6 sticky top-0 z-30">
       <div className="flex items-center gap-4">
         {/* Mobile Hamburger Menu */}
         <button 
@@ -63,7 +63,7 @@ const Header = ({ onOpenSidebar }) => {
                 <button
                   key={lang.code}
                   onClick={() => handleLanguageChange(lang.code)}
-                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${i18n.language === lang.code ? 'text-[#00875a] font-bold bg-green-50' : 'text-gray-700 font-medium'}`}
+                  className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${i18n.language === lang.code ? 'text-blue-600 font-bold bg-blue-50' : 'text-gray-700 font-medium'}`}
                 >
                   {lang.name}
                 </button>

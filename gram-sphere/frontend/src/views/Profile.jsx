@@ -15,6 +15,15 @@ const Profile = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [profilePic, setProfilePic] = useState(null);
+  
+  const handleProfilePicUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setProfilePic(url);
+    }
+  };
   
   // Camera & Upload States
   const [isUploading, setIsUploading] = useState(false);
@@ -189,17 +198,31 @@ const Profile = () => {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto bg-[#f3f4f6]">
+    <div className="flex flex-col h-full overflow-y-auto bg-transparent">
       {error && (
         <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 text-sm text-amber-800 font-medium">
           Could not connect to backend: {error}. Showing offline data.
         </div>
       )}
-      <div className="bg-white border-b border-gray-200">
-        <div className="h-32 bg-gradient-to-r from-[#00875a] to-emerald-400"></div>
+      <div className="bg-transparent">
+        <div className="px-6 sm:px-8 pt-6 max-w-7xl mx-auto w-full">
+          <div className="w-full h-32 md:h-48 rounded-[24px] overflow-hidden relative shadow-sm">
+            <img src="/profile_img.png" alt="Profile Header" className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-black/40"></div>
+          </div>
+        </div>
         <div className="max-w-4xl mx-auto px-6 sm:px-8 pb-8 relative">
-          <div className="absolute -top-12 border-4 border-white rounded-full w-24 h-24 bg-gray-200 flex items-center justify-center text-3xl shadow-sm overflow-hidden z-10">
-            👨‍🔧
+          <div className="absolute -top-12 border-4 border-white rounded-[20px] w-24 h-24 bg-blue-50 flex items-center justify-center text-4xl shadow-sm z-10 overflow-hidden relative group cursor-pointer">
+            <input type="file" accept="image/*" onChange={handleProfilePicUpload} className="absolute inset-0 opacity-0 cursor-pointer z-20" title="Change Profile Picture" />
+            {profilePic ? (
+              <img src={profilePic} alt="Profile DP" className="w-full h-full object-cover" />
+            ) : (
+              <span>👨‍🔧</span>
+            )}
+            <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
+              <Camera className="w-6 h-6 text-white mb-1" />
+              <span className="text-[10px] text-white font-bold uppercase tracking-wider">Change</span>
+            </div>
           </div>
           <div className="pt-14 flex flex-col sm:flex-row justify-between items-start gap-4">
             <div className="flex-1 w-full">
@@ -224,13 +247,13 @@ const Profile = () => {
               <div className="flex gap-2">
                 {isEditing ? (
                   <>
-                    <button onClick={handleSave} disabled={saving} className="bg-[#00875a] text-white font-bold px-6 py-2 rounded-full hover:bg-[#006b47] shadow-sm transition-colors disabled:opacity-50">
+                    <button onClick={handleSave} disabled={saving} className="bg-[#007B55] text-white font-bold px-6 py-2 rounded-full hover:bg-[#006b47] shadow-sm transition-colors disabled:opacity-50">
                       {saving ? 'Saving...' : t('profile.save_changes', 'Save Changes')}
                     </button>
-                    <button onClick={() => setIsEditing(false)} className="bg-white border border-gray-300 text-gray-700 font-bold px-4 py-2 rounded-full hover:bg-gray-50 shadow-sm transition-colors">{t('profile.cancel', 'Cancel')}</button>
+                    <button onClick={() => setIsEditing(false)} className="bg-white border border-gray-200 text-gray-700 font-bold px-5 py-2 rounded-full hover:bg-gray-50 shadow-sm transition-colors">{t('profile.cancel', 'Cancel')}</button>
                   </>
                 ) : (
-                  <button onClick={() => setIsEditing(true)} className="bg-white border border-gray-300 text-gray-700 font-bold px-4 py-2 rounded-full hover:bg-gray-50 shadow-sm transition-colors">{t('profile.edit_profile', 'Edit Profile')}</button>
+                  <button onClick={() => setIsEditing(true)} className="bg-white border border-gray-200 text-[#1D1C1D] font-bold px-5 py-2 rounded-full hover:bg-gray-50 shadow-sm transition-colors">{t('profile.edit_profile', 'Edit Profile')}</button>
                 )}
               </div>
             </div>
@@ -240,8 +263,8 @@ const Profile = () => {
 
       <div className="max-w-4xl mx-auto w-full px-6 sm:px-8 py-8 grid grid-cols-1 md:grid-cols-3 gap-8">
         <div className="md:col-span-1 space-y-6">
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm sticky top-6">
-            <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-[#00875a]" />{t('profile.verified_skills', 'Verified Skills')}</h2>
+          <div className="bg-white border border-gray-100 rounded-[24px] p-6 shadow-sm sticky top-6">
+            <h2 className="text-lg font-bold text-[#1D1C1D] mb-4 flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-blue-500" />{t('profile.verified_skills', 'Verified Skills')}</h2>
             <p className="text-xs text-gray-500 mb-4 font-medium">{t('profile.skills_info', 'Skills marked with a blue badge are AI-verified using proof of work.')}</p>
             <div className="space-y-3">
               {mockSkills.map((skill) => (
@@ -260,8 +283,8 @@ const Profile = () => {
           </div>
 
           {skillGapData && skillGapData.skill_gaps && (
-            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-              <h2 className="text-lg font-bold text-gray-900 mb-3">{t('profile.ai_recommendations', 'AI Skill Recommendations')}</h2>
+            <div className="bg-white border border-gray-100 rounded-[24px] p-6 shadow-sm">
+              <h2 className="text-lg font-bold text-[#1D1C1D] mb-3">{t('profile.ai_recommendations', 'AI Skill Recommendations')}</h2>
               <p className="text-xs text-gray-500 mb-3 font-medium">{skillGapData.local_demand_context}</p>
               {skillGapData.top_skill_to_learn && (
                 <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3">
@@ -279,7 +302,7 @@ const Profile = () => {
         </div>
 
         <div className="md:col-span-2 space-y-6">
-          <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="bg-white border border-gray-100 rounded-[24px] shadow-sm overflow-hidden">
             {/* Step Indicator */}
             {cameraStep !== 'idle' && (
               <div className="flex items-center gap-0 border-b border-gray-100">
@@ -293,10 +316,10 @@ const Profile = () => {
                   const isActive = s.key === cameraStep;
                   const isDone = currentOrder > s.step;
                   return (
-                    <div key={s.key} className={`flex-1 py-3 px-2 text-center text-xs font-bold border-b-2 transition-colors ${
-                      isActive ? 'border-[#00875a] text-[#00875a] bg-green-50' :
+                    <div key={s.key} className={`flex-1 py-4 px-2 text-center text-sm font-bold border-b-2 transition-colors ${
+                      isActive ? 'border-[#007B55] text-[#007B55] bg-green-50' :
                       isDone ? 'border-blue-400 text-blue-500 bg-blue-50' :
-                      'border-transparent text-gray-300'
+                      'border-transparent text-gray-400'
                     }`}>
                       {s.label}
                     </div>
@@ -304,9 +327,9 @@ const Profile = () => {
                 })}
               </div>
             )}
-            <div className="p-4 border-b border-gray-100 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-lg">👨‍🔧</div>
-              <button onClick={startCamera} className="flex-1 text-left bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-full px-4 py-2.5 text-gray-500 font-medium transition-colors">{t('profile.upload_proof', 'Upload proof of work...')}</button>
+            <div className="p-6 border-b border-gray-100 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-[12px] bg-blue-50 border border-blue-100 flex items-center justify-center text-xl">👨‍🔧</div>
+              <button onClick={startCamera} className="flex-1 text-left bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-full px-5 py-3 text-gray-500 font-medium transition-colors shadow-sm">{t('profile.upload_proof', 'Upload proof of work...')}</button>
             </div>
             {isUploading && (
               <div className="p-8 flex flex-col items-center justify-center bg-gray-50">
@@ -343,22 +366,22 @@ const Profile = () => {
 
           <div className="space-y-6">
             {posts.map(post => (
-              <div key={post.id} className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-                <div className="p-4 flex items-start justify-between">
-                  <div className="flex gap-3">
-                    <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-xl">👨‍🔧</div>
+              <div key={post.id} className="bg-white border border-gray-100 rounded-[24px] shadow-sm overflow-hidden">
+                <div className="p-5 flex items-start justify-between">
+                  <div className="flex gap-4">
+                    <div className="w-12 h-12 rounded-[12px] bg-blue-50 border border-blue-100 flex items-center justify-center text-xl">👨‍🔧</div>
                     <div>
-                      <h3 className="font-bold text-gray-900 leading-tight">{userData.name}</h3>
+                      <h3 className="font-bold text-[#1D1C1D] leading-tight text-lg">{userData.name}</h3>
                       <p className="text-xs text-gray-500">{userData.role}</p>
                       <p className="text-xs text-gray-400 mt-0.5">{post.timestamp}</p>
                     </div>
                   </div>
                   <button className="text-gray-400 hover:text-gray-600"><MoreHorizontal className="w-5 h-5" /></button>
                 </div>
-                <div className="px-4 pb-3">
-                  <p className="text-sm text-gray-700 mb-3">{t('profile.post_desc', 'Just completed another task! Proof of work captured and verified.')}</p>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {post.tags.map(tag => <span key={tag} className="text-[#00875a] text-sm font-semibold hover:underline cursor-pointer">{tag}</span>)}
+                <div className="px-5 pb-4">
+                  <p className="text-gray-700 mb-3 leading-relaxed">{t('profile.post_desc', 'Just completed another task! Proof of work captured and verified.')}</p>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {post.tags.map(tag => <span key={tag} className="text-blue-600 text-sm font-semibold hover:underline cursor-pointer">{tag}</span>)}
                   </div>
                 </div>
                 <div className="relative">

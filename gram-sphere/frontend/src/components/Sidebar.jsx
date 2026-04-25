@@ -31,12 +31,13 @@ const Sidebar = ({ isOpen, onClose, activeView, setActiveView }) => {
       `}>
         <div className="flex flex-col h-full">
           {/* Logo Area */}
-          <div className="h-16 flex items-center px-6 border-b border-gray-200">
+          <div className="h-16 flex items-center px-6 border-b border-gray-100">
             <div className="flex items-center gap-2">
-              <div className="bg-[#00875a] text-white p-1.5 rounded-md">
-                <Home className="w-5 h-5" />
-              </div>
-              <span className="text-gray-900 font-bold tracking-tight text-lg">GramSphere</span>
+              <svg className="w-6 h-6 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
+              <span className="text-[#1D1C1D] font-bold tracking-tight text-lg">GramSphere</span>
             </div>
           </div>
 
@@ -55,11 +56,11 @@ const Sidebar = ({ isOpen, onClose, activeView, setActiveView }) => {
                   className={`
                     w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left
                     ${isActive 
-                      ? 'bg-gray-100 text-gray-900 font-semibold' 
+                      ? 'bg-blue-50 text-blue-700 font-bold' 
                       : 'text-gray-600 font-medium hover:bg-gray-50 hover:text-gray-900'}
                   `}
                 >
-                  <Icon className={`w-5 h-5 ${isActive ? 'text-[#00875a]' : 'text-gray-500'}`} />
+                  <Icon className={`w-5 h-5 ${isActive ? 'text-blue-600' : 'text-gray-500'}`} />
                   {link.name}
                 </button>
               );
@@ -67,13 +68,13 @@ const Sidebar = ({ isOpen, onClose, activeView, setActiveView }) => {
           </nav>
 
           {/* Bottom Area */}
-          <div className="p-4 border-t border-gray-200 m-4 rounded-xl bg-gray-50">
+          <div className="p-4 border-t border-gray-100 m-4 rounded-xl bg-gray-50">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-[#00875a] flex items-center justify-center text-sm font-bold text-white shadow-sm">
+              <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-sm font-bold text-white shadow-sm">
                 U
               </div>
               <div className="flex flex-col">
-                <span className="text-sm font-bold text-gray-900">{t('sidebar.user_profile', 'User Profile')}</span>
+                <span className="text-sm font-bold text-[#1D1C1D]">{t('sidebar.user_profile', 'User Profile')}</span>
                 <span className="text-xs font-medium text-gray-500">{t('sidebar.youth_account', 'Youth Account')}</span>
               </div>
             </div>

@@ -1,9 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Dashboard from './pages/Dashboard';
+import LandingPage from './pages/LandingPage';
 
 function App() {
-  return (
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  return isLoggedIn ? (
     <Dashboard />
+  ) : (
+    <LandingPage onLogin={() => setIsLoggedIn(true)} />
   );
 }
 
