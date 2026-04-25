@@ -1,7 +1,7 @@
 """
 seed_gramlens.py — Populates Firestore with a realistic artisan network
 for the GramLens trust graph visualization.
-Run: ..\.venv\Scripts\python.exe scripts/seed_gramlens.py
+Now with Merchant/Worker roles and location privacy.
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -27,7 +27,7 @@ DISTRICT_COORDS = {
 TRADES = ["carpenter", "weaver", "potter", "blacksmith", "tailor", "mason"]
 TIERS  = ["bronze", "silver", "gold"]
 TIER_WEIGHTS = {"bronze": 0.2, "silver": 0.5, "gold": 0.8}
-EDGE_TYPES = ["gig", "vouch", "loan"]
+EDGE_TYPES = ["gig", "vouch", "employment"]
 
 NAMES = [
     "Arjun Kumar", "Meena Devi", "Raju Naik", "Priya Gowda", "Suresh Babu",
@@ -44,39 +44,58 @@ def jitter(coord, amount=0.08):
     return coord + random.uniform(-amount, amount)
 
 def seed():
-    print("Seeding GramLens data to Production Firestore...")
-    batch = db.batch()
+    print("Seeding Optimized GramLens Network to Production Firestore...")
+    
+    # Clear existing
+    print("  Clearing existing network data...")
+    for doc in db.collection("users").stream(): doc.reference.delete()
+    for doc in db.collection("edges").stream(): doc.reference.delete()
 
+    batch = db.batch()
     users = []
     districts = list(DISTRICT_COORDS.keys())
 
-    # Generate 40 artisan users
-    print("  Creating 40 users...")
-    for i, name in enumerate(NAMES):
-        uid = f"demo_user_{i+1:03d}"
-        district = random.choice(districts)
-        coords = DISTRICT_COORDS[district]
-        trade = TRADES[i % len(TRADES)]
-        tier = random.choices(TIERS, weights=[0.6, 0.3, 0.1])[0]
-        trust_score = random.randint(20, 85)
-        days_ago = random.randint(0, 90)
-        created = datetime.utcnow() - timedelta(days=days_ago)
+    # 1. Create 60 users for a richer graph
+    print("  Generating 60 specialized nodes (Clustered by Trade)...")
+    # Define trade specializations for districts to create "hubs"
+    district_specialty = {
+        "Mysuru":    ["weaver", "carpenter"],
+        "Mandya":    ["potter", "weaver"],
+        "Hassan":    ["blacksmith", "mason"],
+        "Kodagu":    ["carpenter", "tailor"],
+        "Chamarajanagar": ["weaver", "potter"],
+        "Ramanagara":["tailor", "blacksmith"],
+        "Tumkur":    ["mason", "carpenter"],
+        "Bengaluru": ["tailor", "blacksmith"]
+    }
 
+    for i in range(60):
+        uid = f"demo_user_{i+1:03d}"
+        name = NAMES[i % len(NAMES)] if i < len(NAMES) else f"Artisan {i}"
+        district = districts[i % len(districts)]
+        
+        # Select trade based on district specialty
+        trade = random.choice(district_specialty[district])
+        
+        role = "merchant" if i % 6 == 0 else "worker"
+        tier = random.choices(TIERS, weights=[0.4, 0.4, 0.2])[0]
+        
         user = {
             "name": name,
             "trade": trade,
             "district": district,
-            "role": "youth",
-            "trustScore": trust_score,
-            "skillTokens": random.randint(0, 15),
-            "level": random.randint(1, 5),
+            "role": role,
+            "trustScore": random.randint(40, 95) if tier in ("gold", "silver") else random.randint(20, 60),
+            "skillTokens": random.randint(5, 20) if role == "merchant" else random.randint(0, 10),
             "certTier": tier,
             "certTrustWeight": TIER_WEIGHTS[tier],
-            "avgGigRating": round(random.uniform(3.5, 5.0), 1),
-            "lat": jitter(coords["lat"]),
-            "lng": jitter(coords["lng"]),
-            "createdAt": created
+            "createdAt": datetime.utcnow() - timedelta(days=random.randint(10, 120))
         }
+        
+        if role == "merchant":
+            user["lat"] = jitter(DISTRICT_COORDS[district]["lat"], 0.04)
+            user["lng"] = jitter(DISTRICT_COORDS[district]["lng"], 0.04)
+        
         users.append({"uid": uid, **user})
         ref = db.collection("users").document(uid)
         batch.set(ref, user)
@@ -84,48 +103,80 @@ def seed():
     batch.commit()
     print(f"  OK {len(users)} users written.")
 
-    # Generate ~80 edges between users
-    print("  Creating 80 trust edges...")
+    # 2. Generate Structured Edges
+    print("  Building specialized trade hubs...")
     batch2 = db.batch()
     edge_count = 0
 
-    for i in range(80):
-        src = random.choice(users)
-        tgt = random.choice(users)
-        if src["uid"] == tgt["uid"]:
-            continue
-        edge_type = random.choice(EDGE_TYPES)
-        days_ago = random.randint(0, 60)
-        created = datetime.utcnow() - timedelta(days=days_ago)
+    merchants = [u for u in users if u["role"] == "merchant"]
+    workers   = [u for u in users if u["role"] == "worker"]
 
-        edge = {
-            "fromUserId": src["uid"],
-            "toUserId":   tgt["uid"],
-            "type":       edge_type,
-            "weight":     round(random.uniform(0.5, 1.5), 2),
-            "createdAt":  created
-        }
-        edge_ref = db.collection("edges").document()
-        batch2.set(edge_ref, edge)
-        edge_count += 1
+    # Rule A: Employment Hubs
+    for w in workers:
+        local_merchants = [m for m in merchants if m["district"] == w["district"]]
+        if local_merchants:
+            # High chance to connect to a local merchant
+            if random.random() < 0.9:
+                m = random.choice(local_merchants)
+                edge = {
+                    "fromUserId": w["uid"],
+                    "toUserId":   m["uid"],
+                    "type":       "employment",
+                    "weight":     1.5,
+                    "createdAt":  datetime.utcnow() - timedelta(days=random.randint(1, 30))
+                }
+                batch2.set(db.collection("edges").document(), edge)
+                edge_count += 1
+
+    # Rule B: Trade Peer Vouching (Much higher density within local specialties)
+    for d in districts:
+        district_workers = [w for w in workers if w["district"] == d]
+        for i, w1 in enumerate(district_workers):
+            for w2 in district_workers[i+1:]:
+                if w1["trade"] == w2["trade"]:
+                    # 60% chance for trade peers in the same district to vouch
+                    if random.random() < 0.6:
+                        edge = {
+                            "fromUserId": w1["uid"],
+                            "toUserId":   w2["uid"],
+                            "type":       "vouch",
+                            "weight":     1.0,
+                            "createdAt":  datetime.utcnow() - timedelta(days=random.randint(5, 50))
+                        }
+                        batch2.set(db.collection("edges").document(), edge)
+                        edge_count += 1
+
+    # Rule C: Cross-District Gigs
+    for _ in range(30):
+        w = random.choice(workers)
+        m = random.choice(merchants)
+        if w["district"] != m["district"]:
+            edge = {
+                "fromUserId": w["uid"],
+                "toUserId":   m["uid"],
+                "type":       "gig",
+                "weight":     0.7,
+                "createdAt":  datetime.utcnow() - timedelta(days=random.randint(0, 10))
+            }
+            batch2.set(db.collection("edges").document(), edge)
+            edge_count += 1
 
     batch2.commit()
     print(f"  OK {edge_count} edges written.")
 
-    # Update analytics/velocity with current state
-    print("  Updating analytics...")
+
+    # Update analytics
     db.collection("analytics").document("velocity").set({
         "score": edge_count,
-        "delta": 42.0,
+        "delta": 22.5,
         "trend": "up",
-        "thisWeek": random.randint(10, 25),
-        "lastWeek": random.randint(5, 15)
+        "thisWeek": random.randint(15, 30),
+        "lastWeek": random.randint(10, 20)
     })
 
-    print("\nDone! GramLens network is ready.")
-    print(f"  Users: {len(users)}")
-    print(f"  Edges: {edge_count}")
-    print(f"  Districts: {len(districts)}")
+    print("\nDone! Optimized network is live.")
+
 
 if __name__ == "__main__":
     seed()
+
