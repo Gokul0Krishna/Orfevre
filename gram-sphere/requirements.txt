@@ -1,7 +1,8 @@
-fastapi
+fastapi[standard]
 uvicorn
 networkx
 firebase-admin
 google-generativeai
 python-dotenv
 cachetools
+python-multipart
