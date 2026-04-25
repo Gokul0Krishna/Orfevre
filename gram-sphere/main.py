@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import skillflow, creditweb, bazaarpulse, gramlens
+from router import skillflow, creditweb, bazaarpulse, gramlens
 
 app = FastAPI(title="GramSphere API", version="1.0.0")
 
