@@ -41,37 +41,42 @@ async def bridge_nodes():
 @router.get("/cluster/{district}/stats")
 async def cluster_stats(district: str):
     users = [
-        d.to_dict() for d in
+        {"id": d.id, **d.to_dict()} for d in
         db.collection("users").where("district", "==", district).stream()
     ]
+
+    all_edges = list(db.collection("edges").stream())
+    total_edges = len(all_edges)
+
     if not users:
-        return {"district": district, "totalUsers": 0}
+        return {
+            "district": district, "total_users": 0,
+            "total_edges": total_edges, "network_density": 0,
+            "avg_trust_score": 0, "top_trade": "N/A"
+        }
 
-    avg_trust = round(
-        sum(u.get("trustScore", 0) for u in users) / len(users), 1
-    )
+    n = len(users)
+    avg_trust = round(sum(u.get("trustScore", 0) for u in users) / n, 1)
 
-    # Count trade distribution
     trade_counts = defaultdict(int)
     for u in users:
         trade_counts[u.get("trade", "unknown")] += 1
     top_trade = max(trade_counts, key=trade_counts.get)
 
-    # Count loans + gigs in this district
-    user_ids = [u.get("id") for u in users if u.get("id")]
-    loans = [
-        d.to_dict() for d in db.collection("loans").stream()
-        if d.to_dict().get("applicantId") in user_ids
-    ]
+    # Network density: actual_edges / max_possible_edges (across full network)
+    all_users_count = len(list(db.collection("users").stream()))
+    max_edges = max(all_users_count * (all_users_count - 1), 1)
+    density = round(total_edges / max_edges, 4)
 
     velocity = get_cluster_velocity()
 
     return {
         "district":       district,
-        "totalUsers":     len(users),
-        "avgTrustScore":  avg_trust,
-        "topTrade":       top_trade,
-        "totalLoans":     len(loans),
-        "velocityScore":  velocity["score"],
-        "velocityTrend":  velocity["trend"]
-    }
+        "total_users":    n,
+        "total_edges":    total_edges,
+        "network_density": density,
+        "avg_trust_score": avg_trust,
+        "top_trade":      top_trade,
+        "velocity_score": velocity["score"],
+        "velocity_trend": velocity["trend"],
+    }
