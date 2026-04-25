@@ -5,4 +5,5 @@ firebase-admin
 google-generativeai
 python-dotenv
 cachetools
-python-multipart
+python-multipartgunicorn
+uvicorn
