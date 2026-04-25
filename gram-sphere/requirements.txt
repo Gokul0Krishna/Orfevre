@@ -7,7 +7,9 @@ python-dotenv
 cachetools
 python-multipartgunicorn
 uvicorn
-
+pytest
+pytest-asyncio
+httpx
 python-multipart
 Pillow
 geopy

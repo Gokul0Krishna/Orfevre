@@ -68,13 +68,22 @@ def compute_trust_score(user_id: str) -> float:
     else:
         repayment_rate = 1.0   # no loans = no defaults = full score
 
-    score = (
+    # Pull certificate trust weight from Firestore
+    user_doc      = db.collection("users").document(user_id).get().to_dict() or {}
+    cert_weight   = user_doc.get("certTrustWeight", 0)   # 0.2 to 1.0
+
+    # Blend into final score: certificate boosts the ceiling
+    base_score = (
         degree_score   * 0.4 +
         recent_score   * 0.3 +
         repayment_rate * 0.3
     ) * 100
 
-    result = round(min(score, 100.0), 1)
+    # Certificate acts as a multiplier on top, adds up to 25 points
+    cert_boost    = cert_weight * 25
+    final_score   = min(base_score + cert_boost, 100)
+
+    result = round(final_score, 1)
     trust_cache[user_id] = result
     return result
 
