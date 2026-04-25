@@ -9,7 +9,7 @@ const Dashboard = () => {
   const [activeView, setActiveView] = useState('jobconnect');
 
   return (
-    <div className="flex h-screen bg-[#080808] text-white overflow-hidden font-sans">
+    <div className="flex h-screen bg-[#f3f4f6] text-gray-900 overflow-hidden font-sans">
       <Sidebar 
         isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} 
@@ -20,13 +20,13 @@ const Dashboard = () => {
       <div className="flex-1 flex flex-col min-w-0">
         <Header onOpenSidebar={() => setIsSidebarOpen(true)} />
         
-        <main className="flex-1 relative bg-[#080808] overflow-hidden">
+        <main className="flex-1 relative bg-[#f3f4f6] overflow-hidden">
           {activeView === 'jobconnect' && <JobConnect />}
           {activeView === 'profile' && <Profile />}
           {/* Mock empty states for other views */}
           {activeView !== 'jobconnect' && activeView !== 'profile' && (
             <div className="flex items-center justify-center h-full">
-              <p className="text-gray-400">This view is not implemented yet.</p>
+              <p className="text-gray-500">This view is not implemented yet.</p>
             </div>
           )}
         </main>
