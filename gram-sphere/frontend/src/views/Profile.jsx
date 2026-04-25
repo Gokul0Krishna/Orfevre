@@ -63,13 +63,33 @@ const Profile = () => {
     }
   }, [userData?.trade, userData?.district]);
 
-  const handleUpload = () => {
-    setIsUploading(true);
-    // Mock processing delay for Gemini Vision API
-    setTimeout(() => {
-      setIsUploading(false);
-      setShowNewBadge(true);
-    }, 3000);
+  const handleUpload = async () => {
+    // In a real app, we would use a file input. 
+    // Here we'll simulate picking a file for the sake of the demonstration.
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*,video/*';
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      setIsUploading(true);
+      try {
+        const res = await uploadProof(CURRENT_USER_ID, 'Handloom Weaving', file);
+        if (res.success) {
+          setShowNewBadge(true);
+          // Update local tokens
+          setUserData(prev => ({ ...prev, skillTokens: res.totalTokens }));
+          alert(res.message);
+        }
+      } catch (err) {
+        console.error('Upload failed:', err);
+        alert('Verification failed. Is the backend running?');
+      } finally {
+        setIsUploading(false);
+      }
+    };
+    input.click();
   };
 
   const handleSave = async () => {

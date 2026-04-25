@@ -50,9 +50,18 @@ async def update_user(user_id: str, body: UserUpdateRequest):
 
 # -- GET /gigs -------------------------------------------------------------
 @router.get("/gigs")
-async def list_gigs():
-    """Return all open gigs from Firestore."""
-    docs = db.collection("gigs").stream()
+async def list_gigs(category: Optional[str] = None):
+    """Return gigs from Firestore, optionally filtered by category (trade)."""
+    query = db.collection("gigs")
+    
+    if category:
+        # Simple case-insensitive match (start-of-string)
+        # Note: Firestore doesn't do case-insensitive search easily, 
+        # so we fetch and filter if needed or assume exact match for now.
+        docs = query.where("title", "==", category).stream()
+    else:
+        docs = query.stream()
+
     gigs = []
     for d in docs:
         gig = d.to_dict()

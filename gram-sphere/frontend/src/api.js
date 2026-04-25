@@ -47,6 +47,20 @@ export function getSkillGap(trade, currentSkills, district, goal) {
   });
 }
 
+export function uploadProof(userId, skill, file) {
+  const formData = new FormData();
+  formData.append('userId', userId);
+  formData.append('skill', skill);
+  formData.append('file', file);
+
+  return fetch('/api/upload-proof', {
+    method: 'POST',
+    body: formData,
+    // Note: Don't set Content-Type header manually for FormData, 
+    // fetch will set it with the correct boundary.
+  }).then(res => res.json());
+}
+
 export function matchSchemes(userId) {
   return request(`/match-schemes/${userId}`);
 }

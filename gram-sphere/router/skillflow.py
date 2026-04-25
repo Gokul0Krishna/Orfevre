@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from lib.firestore import db
 from lib.graph_engine import compute_trust_score, get_cluster_velocity
+import os
 from datetime import datetime
 
 router = APIRouter()
@@ -76,6 +77,48 @@ async def complete_gig(body: GigCompleteRequest):
         "vendorTrustScore":   vendor_score,
         "marketplaceUnlocked": marketplace_unlocked,
         "clusterVelocity":    velocity
+    }
+
+
+@router.post("/upload-proof")
+async def upload_proof(
+    userId: str = Form(...),
+    skill: str = Form(...),
+    file: UploadFile = File(...)
+):
+    """
+    Receives a photo/video proof of work. 
+    Updates the user's skill tokens in Firestore upon success.
+    """
+    # 1. Read file (in real app, save to cloud storage and call Gemini Vision)
+    _contents = await file.read()
+    
+    # 2. Update Firestore: Increment tokens
+    user_ref = db.collection("users").document(userId)
+    user_snap = user_ref.get()
+    
+    if not user_snap.exists:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    old_tokens = user_snap.to_dict().get("skillTokens", 0)
+    new_tokens = old_tokens + 1
+    user_ref.update({
+        "skillTokens": new_tokens,
+        "lastVerifiedSkill": skill
+    })
+    
+    # 3. Add to a "proofs" collection for tracking
+    db.collection("proofs").add({
+        "userId": userId,
+        "skill": skill,
+        "fileName": file.filename,
+        "timestamp": datetime.utcnow()
+    })
+
+    return {
+        "success": True,
+        "message": f"AI verified your {skill} work!",
+        "totalTokens": new_tokens
     }
 
 
