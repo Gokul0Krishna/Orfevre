@@ -8,7 +8,7 @@ load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 model = genai.GenerativeModel(
-    model_name="gemini-1.5-pro",
+    model_name="gemini-1.5-flash-latest",
     generation_config=genai.GenerationConfig(
         response_mime_type="application/json",   # structured output mode
         temperature=0.3,                          # lower = more consistent

@@ -4,4 +4,5 @@ docs.txt
 gram-sphere/__pycache__
 gram-sphere/lib/__pycache__
 gram-sphere/router/__pycache__/*
-
+config/*
+firebase/*
