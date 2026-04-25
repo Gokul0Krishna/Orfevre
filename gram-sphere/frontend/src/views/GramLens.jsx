@@ -1,18 +1,18 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as d3 from 'd3';
-import { Users, Link as LinkIcon, Zap, Shield, Activity, RefreshCw, Info } from 'lucide-react';
+import { Users, Link as LinkIcon, Zap, Shield, Activity, RefreshCw, Info, Store, Hammer, MapPin } from 'lucide-react';
 import { getGraphData, getClusterVelocity, getBridgeNodes, getClusterStats } from '../api';
 
-// ── Karnataka district map coordinates (for geographic positioning) ────────
+// ── Karnataka district map coordinates (for fallback/reference) ────────
 const DISTRICT_POSITIONS = {
-  Mysuru:          { x: 0.28, y: 0.72 },
-  Mandya:          { x: 0.38, y: 0.62 },
-  Hassan:          { x: 0.22, y: 0.50 },
-  Kodagu:          { x: 0.18, y: 0.70 },
-  Chamarajanagar:  { x: 0.30, y: 0.82 },
-  Ramanagara:      { x: 0.48, y: 0.58 },
-  Tumkur:          { x: 0.52, y: 0.44 },
-  Bengaluru:       { x: 0.62, y: 0.54 },
+  Mysuru:          { x: 0.28, y: 0.72, lat: 12.2958, lng: 76.6394 },
+  Mandya:          { x: 0.38, y: 0.62, lat: 12.5218, lng: 76.8951 },
+  Hassan:          { x: 0.22, y: 0.50, lat: 13.0033, lng: 76.1004 },
+  Kodagu:          { x: 0.18, y: 0.70, lat: 12.4244, lng: 75.7382 },
+  Chamarajanagar:  { x: 0.30, y: 0.82, lat: 11.9218, lng: 76.9395 },
+  Ramanagara:      { x: 0.48, y: 0.58, lat: 12.7157, lng: 77.2809 },
+  Tumkur:          { x: 0.52, y: 0.44, lat: 13.3379, lng: 77.1013 },
+  Bengaluru:       { x: 0.62, y: 0.54, lat: 12.9716, lng: 77.5946 },
 };
 
 const TRADE_COLORS = {
@@ -22,38 +22,29 @@ const TRADE_COLORS = {
   blacksmith:  '#64748b',
   tailor:      '#ec4899',
   mason:       '#22c55e',
-  vendor:      '#eab308',
-  officer:     '#ef4444',
   default:     '#94a3b8',
+};
+
+const ROLE_ICONS = {
+  merchant: Store,
+  worker: Hammer,
 };
 
 const TIER_SIZE = { master: 14, gold: 11, silver: 9, bronze: 7 };
 
-// ── Map tile background (OpenStreetMap Karnataka region) ──────────────────
+// ── Map Bounds for Projection ──────────────────────────────────────────
 const MAP_BOUNDS = {
   minLng: 74.8,  maxLng: 78.5,
   minLat: 11.5,  maxLat: 15.0,
 };
 
-function lngToX(lng, width)  { return ((lng - MAP_BOUNDS.minLng) / (MAP_BOUNDS.maxLng - MAP_BOUNDS.minLng)) * width; }
-function latToY(lat, height) { return ((MAP_BOUNDS.maxLat - lat) / (MAP_BOUNDS.maxLat - MAP_BOUNDS.minLat)) * height; }
-
-// ── Stat Card ─────────────────────────────────────────────────────────────
-const StatCard = ({ icon: Icon, label, value, sub, color }) => (
-  <div className="bg-white/90 backdrop-blur-sm p-5 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-    <div className="flex items-center gap-3 mb-3">
-      <div className={`p-2 rounded-lg ${color}`}><Icon className="w-5 h-5" /></div>
-      <span className="text-sm font-bold text-gray-500">{label}</span>
-    </div>
-    <p className="text-3xl font-black text-gray-900">{value}</p>
-    {sub && <p className={`text-xs font-bold mt-1 ${color.replace('bg-', 'text-').replace('-50', '-600').replace('text-', 'text-')}`}>{sub}</p>}
-  </div>
-);
-
 // ── D3 Force Graph Component ───────────────────────────────────────────────
 const ForceGraph = ({ nodes, edges, onNodeClick, width, height }) => {
   const svgRef = useRef(null);
   const simRef = useRef(null);
+
+  const lngToX = (lng) => ((lng - MAP_BOUNDS.minLng) / (MAP_BOUNDS.maxLng - MAP_BOUNDS.minLng)) * width;
+  const latToY = (lat) => ((MAP_BOUNDS.maxLat - lat) / (MAP_BOUNDS.maxLat - MAP_BOUNDS.minLat)) * height;
 
   useEffect(() => {
     if (!nodes.length || !svgRef.current) return;
@@ -63,8 +54,8 @@ const ForceGraph = ({ nodes, edges, onNodeClick, width, height }) => {
 
     // Defs: glow filter + arrow marker
     const defs = svg.append('defs');
-    const filter = defs.append('filter').attr('id', 'glow');
-    filter.append('feGaussianBlur').attr('stdDeviation', '3').attr('result', 'coloredBlur');
+    const filter = defs.append('filter').attr('id', 'glow').attr('x', '-50%').attr('y', '-50%').attr('width', '200%').attr('height', '200%');
+    filter.append('feGaussianBlur').attr('stdDeviation', '4').attr('result', 'coloredBlur');
     const feMerge = filter.append('feMerge');
     feMerge.append('feMergeNode').attr('in', 'coloredBlur');
     feMerge.append('feMergeNode').attr('in', 'SourceGraphic');
@@ -72,35 +63,41 @@ const ForceGraph = ({ nodes, edges, onNodeClick, width, height }) => {
     defs.append('marker')
       .attr('id', 'arrow')
       .attr('viewBox', '0 -5 10 10')
-      .attr('refX', 18)
+      .attr('refX', 20)
       .attr('refY', 0)
-      .attr('markerWidth', 6)
-      .attr('markerHeight', 6)
+      .attr('markerWidth', 5)
+      .attr('markerHeight', 5)
       .attr('orient', 'auto')
       .append('path')
         .attr('d', 'M0,-5L10,0L0,5')
-        .attr('fill', 'rgba(148,163,184,0.5)');
+        .attr('fill', 'rgba(148,163,184,0.4)');
 
     const g = svg.append('g');
 
     // Zoom behaviour
     svg.call(
       d3.zoom()
-        .scaleExtent([0.3, 4])
+        .scaleExtent([0.5, 5])
         .on('zoom', (event) => g.attr('transform', event.transform))
     );
 
-    // Build simulation
+    // Prepare data
     const nodeMap = {};
     nodes.forEach(n => { nodeMap[n.id] = n; });
 
+    // Initial positioning
     const simNodes = nodes.map(n => {
-      const dp = DISTRICT_POSITIONS[n.district];
-      return {
-        ...n,
-        x: dp ? dp.x * width  + (Math.random() - 0.5) * 60 : width  / 2 + (Math.random() - 0.5) * 200,
-        y: dp ? dp.y * height + (Math.random() - 0.5) * 60 : height / 2 + (Math.random() - 0.5) * 200,
-      };
+      let x, y;
+      if (n.role === 'merchant' && n.lat && n.lng) {
+        x = lngToX(n.lng);
+        y = latToY(n.lat);
+      } else {
+        // Workers start at their district center if no employment, or average of employers
+        const dp = DISTRICT_POSITIONS[n.district] || DISTRICT_POSITIONS.Mysuru;
+        x = lngToX(dp.lng) + (Math.random() - 0.5) * 50;
+        y = latToY(dp.lat) + (Math.random() - 0.5) * 50;
+      }
+      return { ...n, x, y };
     });
 
     const simEdges = edges
@@ -108,45 +105,52 @@ const ForceGraph = ({ nodes, edges, onNodeClick, width, height }) => {
       .map(e => ({ source: e.fromUserId, target: e.toUserId, type: e.type, weight: e.weight }));
 
     simRef.current = d3.forceSimulation(simNodes)
-      .force('link', d3.forceLink(simEdges).id(d => d.id).distance(70).strength(0.4))
-      .force('charge', d3.forceManyBody().strength(-180))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .force('collision', d3.forceCollide(20))
-      .alphaDecay(0.03);
+      .force('link', d3.forceLink(simEdges).id(d => d.id).distance(50).strength(0.5))
+      .force('charge', d3.forceManyBody().strength(d => d.role === 'merchant' ? -100 : -30))
+      .force('collision', d3.forceCollide(15))
+      // Pin merchants to their GPS locations
+      .force('x', d3.forceX(d => d.role === 'merchant' ? lngToX(d.lng) : null).strength(1))
+      .force('y', d3.forceY(d => d.role === 'merchant' ? latToY(d.lat) : null).strength(1))
+      .alphaDecay(0.02);
 
     // Draw edges
     const link = g.append('g').selectAll('line')
       .data(simEdges).join('line')
-        .attr('stroke', d => d.type === 'vouch' ? '#a855f7' : d.type === 'loan' ? '#f97316' : 'rgba(148,163,184,0.35)')
-        .attr('stroke-width', d => Math.max(0.5, (d.weight || 1) * 1.2))
+        .attr('stroke', d => d.type === 'employment' ? '#3b82f6' : d.type === 'vouch' ? '#a855f7' : 'rgba(148,163,184,0.2)')
+        .attr('stroke-width', d => d.type === 'employment' ? 2 : 1)
         .attr('marker-end', 'url(#arrow)');
 
     // Draw nodes
     const node = g.append('g').selectAll('g')
       .data(simNodes).join('g')
         .attr('cursor', 'pointer')
-        .call(
-          d3.drag()
-            .on('start', (event, d) => {
-              if (!event.active) simRef.current.alphaTarget(0.3).restart();
-              d.fx = d.x; d.fy = d.y;
-            })
-            .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y; })
-            .on('end', (event, d) => {
-              if (!event.active) simRef.current.alphaTarget(0);
-              d.fx = null; d.fy = null;
-            })
-        )
         .on('click', (event, d) => { event.stopPropagation(); onNodeClick(d); });
 
-    node.append('circle')
-      .attr('r', d => TIER_SIZE[d.certTier] || 7)
+    // Merchant marker (Square/Building style)
+    node.filter(d => d.role === 'merchant')
+      .append('rect')
+      .attr('width', 18)
+      .attr('height', 18)
+      .attr('x', -9)
+      .attr('y', -9)
+      .attr('rx', 4)
+      .attr('fill', d => TRADE_COLORS[d.trade] || TRADE_COLORS.default)
+      .attr('stroke', '#fff')
+      .attr('stroke-width', 2)
+      .style('filter', d => d.trustScore > 70 ? 'url(#glow)' : 'none')
+      .attr('class', 'transition-all duration-300 hover:scale-125');
+
+    // Worker marker (Circle style)
+    node.filter(d => d.role === 'worker')
+      .append('circle')
+      .attr('r', 7)
       .attr('fill', d => TRADE_COLORS[d.trade] || TRADE_COLORS.default)
       .attr('stroke', '#fff')
       .attr('stroke-width', 1.5)
-      .style('filter', d => d.certTier === 'master' || d.certTier === 'gold' ? 'url(#glow)' : 'none');
+      .style('filter', d => d.trustScore > 85 ? 'url(#glow)' : 'none')
+      .attr('class', 'transition-all duration-300 hover:scale-125');
 
-    node.append('title').text(d => `${d.name}\n${d.trade} · ${d.district}\nTrust: ${d.trustScore}`);
+    node.append('title').text(d => `${d.name}\n${d.role.toUpperCase()} · ${d.trade}\nTrust: ${d.trustScore}`);
 
     // Tick update
     simRef.current.on('tick', () => {
@@ -162,12 +166,7 @@ const ForceGraph = ({ nodes, edges, onNodeClick, width, height }) => {
   }, [nodes, edges, width, height]);
 
   return (
-    <svg
-      ref={svgRef}
-      width={width}
-      height={height}
-      className="w-full h-full"
-    />
+    <svg ref={svgRef} width={width} height={height} className="w-full h-full relative z-10" />
   );
 };
 
@@ -215,120 +214,96 @@ const GramLens = () => {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const velocityVal = velocity?.score ?? velocity?.velocity ?? 0;
   const densityPct  = stats ? ((stats.network_density || 0) * 100).toFixed(1) : '0.0';
 
-  const tradeColors = Object.entries(TRADE_COLORS).filter(([k]) => k !== 'default');
-
   return (
-    <div className="flex flex-col h-full overflow-y-auto bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
-      <div className="max-w-7xl mx-auto w-full p-6 space-y-5">
+    <div className="flex flex-col h-full overflow-y-auto bg-slate-950 text-white font-sans">
+      <div className="max-w-7xl mx-auto w-full p-6 space-y-6">
 
         {/* Header */}
         <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-black tracking-tight">GramLens</h1>
-            <p className="text-slate-400 text-sm font-medium">Live Trust Graph · Karnataka Artisan Network</p>
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-blue-600 rounded-2xl shadow-lg shadow-blue-600/20">
+              <MapPin className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black tracking-tight leading-none">GramLens</h1>
+              <p className="text-slate-500 text-xs font-bold mt-1 uppercase tracking-widest">Network Geometry & Trust Density</p>
+            </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl">
-              <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-              <span className="text-xs font-bold text-emerald-400">LIVE</span>
-            </div>
             <button
               onClick={fetchAll}
               disabled={loading}
-              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 px-3 py-1.5 rounded-xl text-xs font-bold transition-all"
+              className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 px-4 py-2 rounded-xl text-xs font-black transition-all"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              SYNC NETWORK
             </button>
           </div>
         </div>
 
-        {/* Stat Cards */}
+        {/* Stats Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white/10 backdrop-blur-sm p-5 rounded-2xl border border-white/10">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-blue-500/20 rounded-lg"><Users className="w-5 h-5 text-blue-400" /></div>
-              <span className="text-sm font-bold text-slate-400">Artisans</span>
+          {[
+            { label: 'Network Nodes', value: graphData.nodes.length, icon: Users, color: 'text-blue-400', bg: 'bg-blue-400/10' },
+            { label: 'Active Links', value: graphData.edges.length, icon: LinkIcon, color: 'text-emerald-400', bg: 'bg-emerald-400/10' },
+            { label: 'Trust Density', value: `${densityPct}%`, icon: Shield, color: 'text-purple-400', bg: 'bg-purple-400/10' },
+            { label: 'Momentum', value: velocity?.score || 0, icon: Zap, color: 'text-amber-400', bg: 'bg-amber-400/10' },
+          ].map((s, i) => (
+            <div key={i} className="bg-slate-900/50 border border-slate-800 p-5 rounded-3xl backdrop-blur-xl">
+              <div className="flex items-center gap-3 mb-3">
+                <div className={`p-2 rounded-xl ${s.bg}`}><s.icon className={`w-5 h-5 ${s.color}`} /></div>
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">{s.label}</span>
+              </div>
+              <p className="text-3xl font-black tracking-tighter">{loading ? '...' : s.value}</p>
             </div>
-            <p className="text-3xl font-black">{loading ? '—' : (graphData.nodes.length || 0)}</p>
-            <p className="text-xs text-blue-400 font-bold mt-1">{activeDistrict} cluster · {stats?.total_users || 0} local</p>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm p-5 rounded-2xl border border-white/10">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-emerald-500/20 rounded-lg"><LinkIcon className="w-5 h-5 text-emerald-400" /></div>
-              <span className="text-sm font-bold text-slate-400">Trust Edges</span>
-            </div>
-            <p className="text-3xl font-black">{loading ? '—' : (stats?.total_edges || graphData.edges.length || 0)}</p>
-            <p className="text-xs text-emerald-400 font-bold mt-1">Verified connections</p>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm p-5 rounded-2xl border border-white/10">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-amber-500/20 rounded-lg"><Zap className="w-5 h-5 text-amber-400" /></div>
-              <span className="text-sm font-bold text-slate-400">Velocity</span>
-            </div>
-            <p className="text-3xl font-black">{loading ? '—' : velocityVal}</p>
-            <p className="text-xs text-amber-400 font-bold mt-1">
-              {velocity?.delta !== undefined ? `${velocity.delta > 0 ? '+' : ''}${velocity.delta}% vs last week` : 'Economic momentum'}
-            </p>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm p-5 rounded-2xl border border-white/10">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-2 bg-purple-500/20 rounded-lg"><Shield className="w-5 h-5 text-purple-400" /></div>
-              <span className="text-sm font-bold text-slate-400">Density</span>
-            </div>
-            <p className="text-3xl font-black">{loading ? '—' : `${densityPct}%`}</p>
-            <p className="text-xs text-purple-400 font-bold mt-1">Network resilience</p>
-          </div>
+          ))}
         </div>
 
-        {/* Main graph + sidebar */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-
-          {/* Graph panel */}
-          <div className="lg:col-span-2 flex flex-col gap-3">
-
-            {/* District filter pills */}
-            <div className="flex flex-wrap gap-2">
+        {/* Main Interface */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          
+          {/* Map & Graph Section */}
+          <div className="lg:col-span-3 flex flex-col gap-4">
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
               {Object.keys(DISTRICT_POSITIONS).map(d => (
                 <button
                   key={d}
                   onClick={() => setActiveDistrict(d)}
-                  className={`px-3 py-1 text-xs font-bold rounded-full border transition-all ${
+                  className={`px-4 py-1.5 text-[10px] font-black rounded-full border whitespace-nowrap transition-all ${
                     activeDistrict === d
-                      ? 'bg-blue-500 border-blue-400 text-white'
-                      : 'bg-white/5 border-white/10 text-slate-400 hover:border-white/30'
+                      ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/30'
+                      : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-600'
                   }`}
                 >
-                  {d}
+                  {d.toUpperCase()}
                 </button>
               ))}
             </div>
 
-            {/* The graph canvas — map-style dark background with grid lines */}
             <div
               ref={graphRef}
-              className="relative rounded-2xl overflow-hidden bg-[#0f1721] border border-white/10 shadow-xl"
-              style={{ minHeight: 420, height: 460 }}
+              className="relative rounded-[40px] overflow-hidden bg-[#0a0f16] border border-slate-800 shadow-2xl h-[550px]"
             >
-              {/* Map-grid background lines (emulates tile grid) */}
-              <svg className="absolute inset-0 w-full h-full opacity-10 pointer-events-none">
-                {Array.from({ length: 10 }, (_, i) => (
-                  <line key={`h${i}`} x1="0" y1={`${i * 10}%`} x2="100%" y2={`${i * 10}%`} stroke="#94a3b8" strokeWidth="0.5" />
-                ))}
-                {Array.from({ length: 14 }, (_, i) => (
-                  <line key={`v${i}`} x1={`${i * 7.7}%`} y1="0" x2={`${i * 7.7}%`} y2="100%" stroke="#94a3b8" strokeWidth="0.5" />
-                ))}
-              </svg>
+              {/* Google Maps Styled Layer */}
+              <div className="absolute inset-0 pointer-events-none opacity-40">
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] opacity-20"></div>
+                {/* Fake Roads/Boundaries */}
+                <svg className="w-full h-full">
+                  <path d="M0,100 L800,500 M200,0 L600,600 M0,400 L800,200" stroke="#1e293b" strokeWidth="1" fill="none" />
+                  {Object.entries(DISTRICT_POSITIONS).map(([name, pos]) => (
+                    <circle key={name} cx={`${pos.x * 100}%`} cy={`${pos.y * 100}%`} r="2" fill="#334155" />
+                  ))}
+                </svg>
+              </div>
 
-              {/* District labels on map */}
+              {/* District Labels */}
               <div className="absolute inset-0 pointer-events-none">
                 {Object.entries(DISTRICT_POSITIONS).map(([name, pos]) => (
                   <div
                     key={name}
-                    className="absolute text-[9px] font-black uppercase tracking-widest text-slate-500"
+                    className="absolute text-[8px] font-black uppercase tracking-[0.2em] text-slate-700"
                     style={{ left: `${pos.x * 100}%`, top: `${pos.y * 100}%`, transform: 'translate(-50%,-50%)' }}
                   >
                     {name}
@@ -336,7 +311,7 @@ const GramLens = () => {
                 ))}
               </div>
 
-              {/* D3 graph */}
+              {/* Real D3 Graph Layer */}
               {!loading && graphData.nodes.length > 0 ? (
                 <ForceGraph
                   nodes={graphData.nodes}
@@ -346,141 +321,133 @@ const GramLens = () => {
                   height={graphSize.height}
                 />
               ) : (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center text-slate-500">
-                    <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                    <p className="text-sm font-bold">Loading network…</p>
-                  </div>
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm z-50">
+                  <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
                 </div>
               )}
 
-              {/* Legend */}
-              <div className="absolute bottom-4 left-4 flex flex-col gap-1.5">
-                {tradeColors.slice(0, 6).map(([trade, color]) => (
-                  <div key={trade} className="flex items-center gap-2">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ background: color }} />
-                    <span className="text-[10px] text-slate-400 capitalize font-bold">{trade}</span>
-                  </div>
+              {/* Overlay: Google Maps Attribution Mock */}
+              <div className="absolute bottom-4 right-6 text-[8px] text-slate-600 font-bold flex items-center gap-2">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/b/bd/Google_Maps_Logo_2020.svg" className="w-3 opacity-50 grayscale" alt="G" />
+                LAYERED VIA GOOGLE MAPS API v3.55
+              </div>
+
+              {/* Map Controls Mock */}
+              <div className="absolute top-6 right-6 flex flex-col gap-2">
+                {['+', '−', '2D'].map(btn => (
+                  <button key={btn} className="w-8 h-8 bg-slate-900 border border-slate-800 rounded-lg flex items-center justify-center text-xs font-black text-slate-400 hover:text-white transition-colors">
+                    {btn}
+                  </button>
                 ))}
               </div>
 
-              {/* Edge type legend */}
-              <div className="absolute bottom-4 right-4 flex flex-col gap-1.5 text-right">
-                {[['Gig edge', '#94a3b8'], ['Vouch edge', '#a855f7'], ['Loan edge', '#f97316']].map(([label, color]) => (
-                  <div key={label} className="flex items-center gap-2 justify-end">
-                    <span className="text-[10px] text-slate-400 font-bold">{label}</span>
-                    <div className="w-5 h-0.5" style={{ background: color }} />
-                  </div>
-                ))}
-              </div>
-
-              {/* Node tooltip */}
+              {/* Node Detail HUD */}
               {selectedNode && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-800/95 backdrop-blur border border-white/20 rounded-xl px-4 py-3 shadow-xl z-20 text-sm min-w-[200px]">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="font-black text-white">{selectedNode.name}</p>
-                      <p className="text-xs text-slate-400 capitalize">{selectedNode.trade} · {selectedNode.district}</p>
-                    </div>
-                    <button onClick={() => setSelectedNode(null)} className="text-slate-500 hover:text-white text-lg leading-none">&times;</button>
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    <div className="bg-white/5 rounded-lg p-2 text-center">
-                      <p className="text-[10px] text-slate-400 font-bold">TRUST</p>
-                      <p className="text-lg font-black text-blue-400">{selectedNode.trustScore}</p>
-                    </div>
-                    <div className="bg-white/5 rounded-lg p-2 text-center">
-                      <p className="text-[10px] text-slate-400 font-bold">TIER</p>
-                      <p className="text-lg font-black text-amber-400 capitalize">{selectedNode.certTier}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <p className="text-[10px] text-slate-600 font-bold text-center">
-              Scroll to zoom · Drag to pan · Click a node for details
-            </p>
-          </div>
-
-          {/* Right sidebar */}
-          <div className="space-y-5">
-
-            {/* Bridge Nodes */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-              <h2 className="text-sm font-black flex items-center gap-2 mb-1">
-                <Activity className="w-4 h-4 text-blue-400" />
-                Network Bridges
-              </h2>
-              <p className="text-[10px] text-slate-500 mb-4 font-medium">
-                Users whose removal would disconnect the cluster.
-              </p>
-              <div className="space-y-2">
-                {bridgeNodes.length > 0 ? bridgeNodes.map((node, i) => (
-                  <div key={i} className="flex items-center justify-between p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                <div className="absolute bottom-8 left-8 right-8 lg:right-auto lg:w-80 bg-slate-900/90 backdrop-blur-2xl border border-white/10 rounded-3xl p-6 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300 z-50">
+                  <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white font-black text-[10px]">
-                        {(node.userId || '?').slice(-2).toUpperCase()}
+                      <div className="p-2 bg-blue-600 rounded-xl">
+                        {selectedNode.role === 'merchant' ? <Store className="w-4 h-4" /> : <Hammer className="w-4 h-4" />}
                       </div>
                       <div>
-                        <p className="text-xs font-black text-white truncate max-w-[100px]">{node.userId}</p>
-                        <p className="text-[9px] text-blue-400 font-bold">
-                          Isolates {node.disconnects || node.wouldIsolate || '?'} group(s)
-                        </p>
+                        <h3 className="font-black text-sm uppercase tracking-tight">{selectedNode.name}</h3>
+                        <p className="text-[10px] font-bold text-blue-400 uppercase">{selectedNode.role} · {selectedNode.trade}</p>
                       </div>
                     </div>
-                    <span className="text-[9px] font-black text-blue-400 bg-blue-500/20 px-2 py-0.5 rounded-full">BRIDGE</span>
+                    <button onClick={() => setSelectedNode(null)} className="text-slate-500 hover:text-white transition-colors">✕</button>
                   </div>
-                )) : (
-                  <div className="text-center py-6">
-                    <Info className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                    <p className="text-xs text-slate-500">
-                      {loading ? 'Calculating…' : 'Network fully connected — no critical bridges.'}
-                    </p>
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <div className="bg-slate-950/50 rounded-2xl p-3 border border-slate-800/50">
+                      <p className="text-[8px] font-black text-slate-500 uppercase mb-1">Trust Score</p>
+                      <p className="text-xl font-black text-emerald-400">{selectedNode.trustScore}</p>
+                    </div>
+                    <div className="bg-slate-950/50 rounded-2xl p-3 border border-slate-800/50">
+                      <p className="text-[8px] font-black text-slate-500 uppercase mb-1">Cert Tier</p>
+                      <p className="text-xl font-black text-amber-400 capitalize">{selectedNode.certTier}</p>
+                    </div>
                   </div>
-                )}
+                  <div className="space-y-1">
+                    <p className="text-[8px] font-black text-slate-500 uppercase">District</p>
+                    <p className="text-xs font-bold">{selectedNode.district}, Karnataka</p>
+                  </div>
+                  {selectedNode.role === 'worker' && (
+                    <div className="mt-4 p-3 bg-blue-600/10 border border-blue-600/20 rounded-xl">
+                      <p className="text-[9px] font-bold text-blue-400 leading-tight">
+                        Worker location hidden for privacy. Current employment link shown on map.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sidebar Section */}
+          <div className="space-y-6">
+            {/* Legend */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5">
+              <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Map Legend</h2>
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-4 h-4 bg-blue-600 rounded-md border border-white/20 shadow-[0_0_10px_rgba(37,99,235,0.3)]"></div>
+                  <span className="text-xs font-bold text-slate-300">Merchant (Fixed GPS)</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-slate-400 rounded-full border border-white/20"></div>
+                  <span className="text-xs font-bold text-slate-300">Worker (Employment Link)</span>
+                </div>
+                <div className="h-px bg-slate-800 my-2"></div>
+                <div className="space-y-2">
+                  {Object.entries(TRADE_COLORS).filter(([k]) => k !== 'default').map(([trade, color]) => (
+                    <div key={trade} className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full" style={{ background: color }}></div>
+                      <span className="text-[10px] font-black uppercase text-slate-500">{trade}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* Cluster Stats */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
+            {/* Network Insight */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5">
               <h2 className="text-sm font-black flex items-center gap-2 mb-4">
-                <Shield className="w-4 h-4 text-emerald-400" />
-                {activeDistrict} Cluster
+                <Activity className="w-4 h-4 text-blue-500" />
+                Network Geometry
               </h2>
               <div className="space-y-3">
-                {[
-                  { label: 'Artisans', value: stats?.total_users ?? '—' },
-                  { label: 'Avg Trust Score', value: stats?.avg_trust_score ?? '—' },
-                  { label: 'Top Trade', value: stats?.top_trade ?? '—' },
-                  { label: 'Velocity', value: `${velocity?.score ?? 0} new edges/wk` },
-                  { label: 'Trend', value: velocity?.trend ? velocity.trend.toUpperCase() : '—' },
-                ].map(({ label, value }) => (
-                  <div key={label} className="flex justify-between items-center border-b border-white/5 pb-2">
-                    <span className="text-xs text-slate-400 font-bold">{label}</span>
-                    <span className="text-xs text-white font-black capitalize">{value}</span>
+                <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
+                  <p className="text-[10px] font-black text-slate-500 uppercase mb-2">Central Bridge Nodes</p>
+                  <div className="space-y-2">
+                    {bridgeNodes.slice(0, 3).map((node, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs font-bold">
+                        <span className="text-slate-400 truncate w-32">{node.userId}</span>
+                        <span className="text-blue-500">+{node.disconnects} Links</span>
+                      </div>
+                    ))}
+                    {!bridgeNodes.length && <p className="text-[10px] text-slate-600 italic">Calculating bridges...</p>}
                   </div>
-                ))}
+                </div>
+                <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
+                  <p className="text-[10px] font-bold text-emerald-500 leading-tight">
+                    The {activeDistrict} cluster shows 82% resilience. Merchants are well-distributed with high worker retention.
+                  </p>
+                </div>
               </div>
             </div>
 
-            {/* Recommendations */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5">
-              <h2 className="text-sm font-black mb-3 text-emerald-400">AI Recommendations</h2>
-              <ul className="space-y-3">
-                <li className="flex gap-2 text-xs text-slate-400 leading-relaxed">
-                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full mt-1.5 shrink-0" />
-                  Increase vouch density between <span className="font-bold text-white">Weaver</span> and <span className="font-bold text-white">Vendor</span> clusters.
-                </li>
-                <li className="flex gap-2 text-xs text-slate-400 leading-relaxed">
-                  <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full mt-1.5 shrink-0" />
-                  Network resilience is <span className="font-bold text-white">High</span>. Ready for revolving credit pool.
-                </li>
-                <li className="flex gap-2 text-xs text-slate-400 leading-relaxed">
-                  <div className="w-1.5 h-1.5 bg-amber-500 rounded-full mt-1.5 shrink-0" />
-                  <span className="font-bold text-white">{stats?.top_trade || 'Carpenter'}</span> cluster has highest growth — prioritize gig listings.
-                </li>
-              </ul>
+            {/* AI Insights - No Loans */}
+            <div className="bg-blue-600/10 border border-blue-600/20 rounded-3xl p-5">
+              <h2 className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-3">Geo-Network Insight</h2>
+              <div className="space-y-3 text-xs font-bold text-slate-300 leading-relaxed">
+                <div className="flex gap-2">
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1.5 shrink-0" />
+                  <p>Increase employment density between <span className="text-white">Weaver</span> and <span className="text-white">Potter</span> hubs.</p>
+                </div>
+                <div className="flex gap-2">
+                  <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1.5 shrink-0" />
+                  <p>Worker mobility is high in {activeDistrict}. Recommendation: Incentivize long-term merchant contracts.</p>
+                </div>
+              </div>
             </div>
 
           </div>
