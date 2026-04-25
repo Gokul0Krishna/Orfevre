@@ -3,3 +3,11 @@ docs.txt
 claude.md
 requirements.md
 backend_integration.md
+.venv
+gram-sphere/__pycache__
+gram-sphere/lib/__pycache__
+gram-sphere/router/__pycache__/*
+config/*
+firebase/*
+node_modules/
+dist/
