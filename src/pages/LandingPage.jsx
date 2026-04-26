@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import ChatbotWidget from '../components/ChatbotWidget';
 
 const LandingPage = () => {
-  const { login: authLogin } = useAuth();
+  const { login: authLogin, guestLogin } = useAuth();
   const [scrollState, setScrollState] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
   const [authError, setAuthError] = useState(null);
@@ -159,6 +159,14 @@ const LandingPage = () => {
               <>Get Started Free</>
             )}
           </button>
+
+          <button
+            onClick={() => guestLogin()}
+            className="mt-6 text-white/80 hover:text-white font-medium text-[16px] underline underline-offset-4 decoration-white/30 hover:decoration-white transition-all"
+          >
+            Explore as Guest (No Login Required)
+          </button>
+
           {authError && (
             <p className="mt-4 text-red-400 text-sm font-medium bg-red-500/10 border border-red-400/30 px-4 py-2 rounded-lg">{authError}</p>
           )}

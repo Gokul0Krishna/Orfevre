@@ -123,8 +123,24 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const guestLogin = () => {
+    const mockUser = {
+      id: 'guest_user_777',
+      name: 'Guest Explorer',
+      email: 'guest@yuva.shakti',
+      role: null
+    };
+    const mockToken = 'mock_guest_token_abc123';
+    
+    localStorage.setItem('token', mockToken);
+    localStorage.setItem('user_data', JSON.stringify(mockUser));
+    setToken(mockToken);
+    setUser(mockUser);
+    setRole(null);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, role, token, isLoading, login, logout, updateRole }}>
+    <AuthContext.Provider value={{ user, role, token, isLoading, login, logout, updateRole, guestLogin }}>
       {children}
     </AuthContext.Provider>
   );
