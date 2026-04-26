@@ -171,35 +171,66 @@ async def upload_skill_task(
     {{
       "match": "yes" | "no", 
       "confidence_score": 0-100, 
-      "reason": "Technical analysis of the technique or output shown."
+      "reason": "Detailed technical analysis of the technique or output shown. Be specific about why it passed or failed."
     }}
     """
-    
-    # For video, we might want to extract frames, but for now let's assume Gemini 2.0 Flash handles the bytes.
     ai_result = await call_gemini(prompt, [file_bytes], mime_type=content_type)
+    ai_passed = ai_result.get("match") == "yes" and ai_result.get("confidence_score", 0) > 75
     
-    # 5. Push to Database if successful
-    if ai_result.get("match") == "yes" and ai_result.get("confidence_score", 0) > 75:
+    # 5. Record Attempt (Always store in DB)
+    attempt_id = str(uuid.uuid4())
+    db.execute(text("""
+        INSERT INTO skill_task_attempts (
+            id, user_id, skill_task_id, video_url, geo_verified, 
+            geo_distance_km, ai_overall_score, ai_passed, ai_feedback, status
+        )
+        VALUES (:id, :u_id, :task_id, :url, :geo, :dist, :score, :passed, :feedback, :status)
+    """), {
+        "id": attempt_id,
+        "u_id": user_id,
+        "task_id": skill_id,
+        "url": f"https://storage.googleapis.com/gramsphere-tasks/{attempt_id}{'.mp4' if is_video else '.jpg'}",
+        "geo": geo_result["valid"],
+        "dist": geo_result.get("distance_km"),
+        "score": ai_result.get("confidence_score", 0),
+        "passed": ai_passed,
+        "feedback": ai_result.get("reason", "No reason provided by AI"),
+        "status": "completed"
+    })
+
+    # 6. Award Badge and Tokens if successful
+    if ai_passed:
         badge_id = str(uuid.uuid4())
+        media_url = f"https://storage.googleapis.com/gramsphere-tasks/{attempt_id}{'.mp4' if is_video else '.jpg'}"
+        ai_report = ai_result.get("reason", "No reason provided by AI")
+        
         db.execute(text("""
-            INSERT INTO skill_badges (id, user_id, badge_name, skill_type, difficulty_level, is_valid)
-            VALUES (:id, :u_id, :name, :type, :level, TRUE)
+            INSERT INTO skill_badges (id, user_id, skill_task_attempt_id, badge_name, skill_type, difficulty_level, video_url, verification_report, is_valid)
+            VALUES (:id, :u_id, :a_id, :name, :type, :level, :v_url, :report, TRUE)
         """), {
             "id": badge_id,
             "u_id": user_id,
+            "a_id": attempt_id,
             "name": skill_def["title"],
-            "type": skill_def["id"].split("_")[0],
-            "level": skill_def["difficulty"]
+            "type": "carpenter",
+            "level": skill_def["difficulty"],
+            "v_url": media_url,
+            "report": ai_report
         })
         
-        # Update user skill tokens
-        token_gain = {"beginner": 10, "intermediate": 20, "advanced": 40}.get(skill_def["difficulty"], 5)
+        token_gain = {"beginner": 10, "intermediate": 20, "advanced": 40, "master": 100}.get(skill_def["difficulty"], 5)
         db.execute(text("UPDATE users SET skill_tokens = skill_tokens + :gain WHERE id = :id"), {"gain": token_gain, "id": user_id})
-        db.commit()
-        
-        return {"success": True, "badge_awarded": skill_def["title"], "confidence": ai_result["confidence_score"]}
     
-    return {"success": False, "ai_match": ai_result.get("match"), "confidence": ai_result.get("confidence_score"), "reason": ai_result.get("reason")}
+    db.commit()
+    
+    return {
+        "success": ai_passed,
+        "ai_match": ai_result.get("match"),
+        "confidence": ai_result.get("confidence_score"),
+        "reason": ai_result.get("reason"),
+        "badge_awarded": skill_def["title"] if ai_passed else None,
+        "attempt_id": attempt_id
+    }
 
 # ── 3. PAST WORK EXPERIENCE API ──────────────────────────────────────
 

@@ -46,12 +46,18 @@ def _build_engine():
         return create_engine("postgresql+pg8000://", creator=_get_conn)
 
     # Direct connection via DATABASE_URL (local Postgres, Supabase, Neon, etc.)
-    if not DB_URL:
+    url = DB_URL
+    if not url or url.strip() == "":
         raise ValueError(
             "Neither INSTANCE_CONNECTION_NAME nor DATABASE_URL is set in .env. "
             "Please configure one of them."
         )
-    return create_engine(DB_URL, pool_pre_ping=True)
+    
+    # SQLAlchemy requires 'postgresql://' but many providers give 'postgres://'
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+        
+    return create_engine(url, pool_pre_ping=True)
 
 
 engine = _build_engine()

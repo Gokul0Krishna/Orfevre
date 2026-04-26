@@ -59,8 +59,24 @@ def past_date(days_min=30, days_max=730):
 # SCHEMA INITIALIZATION
 # ─────────────────────────────────────────────────────────────────────
 def init_db():
-    print("Initializing SQL Schema...")
+    print("Initializing SQL Schema (Clean Slate)...")
     with engine.connect() as conn:
+        # Drop tables in reverse order of dependencies
+        conn.execute(text("""
+            DROP TABLE IF EXISTS merchant_images CASCADE;
+            DROP TABLE IF EXISTS skill_badges CASCADE;
+            DROP TABLE IF EXISTS skill_task_attempts CASCADE;
+            DROP TABLE IF EXISTS skill_media CASCADE;
+            DROP TABLE IF EXISTS merchant_workforce CASCADE;
+            DROP TABLE IF EXISTS employment_records CASCADE;
+            DROP TABLE IF EXISTS certificates CASCADE;
+            DROP TABLE IF EXISTS user_skills CASCADE;
+            DROP TABLE IF EXISTS skill_tasks CASCADE;
+            DROP TABLE IF EXISTS msme_officials CASCADE;
+            DROP TABLE IF EXISTS merchants CASCADE;
+            DROP TABLE IF EXISTS users CASCADE;
+        """))
+        
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS users (
                 id VARCHAR(50) PRIMARY KEY,
@@ -234,6 +250,8 @@ def init_db():
                 skill_type VARCHAR(50),
                 difficulty_level VARCHAR(20),
                 badge_code VARCHAR(50),
+                video_url TEXT,
+                verification_report TEXT,
                 is_valid BOOLEAN DEFAULT TRUE,
                 issued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
@@ -316,7 +334,7 @@ TASK_DEFS = [
 ]
 
 def seed_mysuru():
-    print("⏳  Seeding GramSphere Mysuru data...")
+    print("[SEEDING] Seeding GramSphere Mysuru data...")
     with engine.connect() as conn:
         # Clear data
         conn.execute(text("TRUNCATE merchant_images, skill_badges, skill_task_attempts, skill_media, merchant_workforce, employment_records, certificates, user_skills, skill_tasks, msme_officials, merchants, users CASCADE;"))
@@ -404,7 +422,7 @@ def seed_mysuru():
                 """), {"id": IDS[f"workforce_{idx}"], "m_id": m_id, "u_id": IDS[f"worker_{idx}"], "e_id": IDS[f"emp_{idx}"], "start": start, "role": f"{level.title()} {skill.title()}"})
 
         conn.commit()
-    print("✅  Mysuru data seeded successfully.")
+    print("SUCCESS: Mysuru data seeded successfully.")
 
 if __name__ == "__main__":
     init_db()
