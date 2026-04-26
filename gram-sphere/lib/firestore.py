@@ -2,20 +2,9 @@ import os
 import firebase_admin
 from firebase_admin import credentials, firestore
 from dotenv import load_dotenv
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import os
 
 load_dotenv()
-
-def get_pg_connection():
-    """
-    Returns a psycopg2 connection with RealDictCursor so all rows
-    come back as dicts — directly JSON-serialisable in FastAPI.
-    """
-    return psycopg2.connect(
-        os.getenv("DATABASE_URL"),
-        cursor_factory=RealDictCursor
-    )
 
 from fastapi import HTTPException
 
