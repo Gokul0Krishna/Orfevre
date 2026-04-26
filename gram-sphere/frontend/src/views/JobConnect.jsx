@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 
 // Fallback categories shown when no gigs exist in Firestore
 const defaultCategories = [
+  { id: 'all', title: 'All Jobs', openings: 0, icon: '📋' },
   { id: 'weaver', title: 'Weaver', openings: 0, icon: '🧵' },
   { id: 'potter', title: 'Potter', openings: 0, icon: '🏺' },
   { id: 'cobbler', title: 'Cobbler', openings: 0, icon: '👟' },
@@ -63,7 +64,17 @@ const JobConnect = () => {
             openings: count,
             icon: TRADE_ICONS[title] || '💼',
           }));
-          setCategories(built.length > 0 ? built : defaultCategories);
+          
+          const allCategory = {
+            id: 'all',
+            title: 'All Jobs',
+            openings: fetchedGigs.length,
+            icon: '📋'
+          };
+          
+          setCategories(built.length > 0 ? [allCategory, ...built] : [allCategory, ...defaultCategories.slice(1)]);
+        } else {
+          setCategories(defaultCategories);
         }
         setError(null);
       })
@@ -106,7 +117,7 @@ const JobConnect = () => {
   // View 2: Job Listings (Category Selected)
   if (selectedCategory) {
     // Step 1: Filter by category — check title AND trade field
-    const categoryGigs = gigs.filter((g) => {
+    const categoryGigs = selectedCategory.id === 'all' ? gigs : gigs.filter((g) => {
       const title = (g.title || '').toLowerCase();
       const trade = (g.trade || '').toLowerCase();
       const cat = selectedCategory.title.toLowerCase();

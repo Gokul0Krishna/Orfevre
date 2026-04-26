@@ -97,7 +97,7 @@ Return ONLY valid JSON:
     if "error" in result:
         raise HTTPException(
             status_code=500,
-            detail=f"Gemini parsing failed: {result['error']}. Make sure GEMINI_API_KEY is set in .env"
+            detail=f"Gemini parsing failed: {result['error']}"
         )
 
     return {"success": True, "parsed": result, "corrected_input": corrected_text}

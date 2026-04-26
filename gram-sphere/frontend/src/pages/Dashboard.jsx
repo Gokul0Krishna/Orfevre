@@ -9,6 +9,7 @@ import ApplicationsView from '../views/ApplicationsView';
 import MyGigs from '../views/MyGigs';
 import MyShop from '../views/MyShop';
 import RecruitmentChat from '../views/RecruitmentChat';
+import DistrictSummary from '../views/DistrictSummary';
 
 import { useAuth } from '../context/AuthContext';
 
@@ -40,11 +41,7 @@ const Dashboard = () => {
         {activeView === 'my_gigs'          && <MyGigs />}
         {activeView === 'merchant_home'    && <MyShop />}
         {activeView === 'recruitment_chat' && <RecruitmentChat />}
-        {activeView === 'district_summary' && (
-          <div className="flex items-center justify-center h-full text-gray-500">
-            District Summary (Coming Soon)
-          </div>
-        )}
+        {activeView === 'district_summary' && <DistrictSummary />}
       </main>
     </div>
   );

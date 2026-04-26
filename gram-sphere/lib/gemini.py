@@ -1,29 +1,34 @@
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import json
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
-
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
-# Use gemini-1.5-flash — fast, cheap, widely available
-model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
-    generation_config=genai.GenerationConfig(
-        response_mime_type="application/json",
-        temperature=0.3,
-    )
-)
-
 
 async def call_gemini(prompt: str) -> dict:
     """
-    Call Gemini and parse the JSON response.
+    Call Gemini using the new google-genai SDK and parse the JSON response.
     Falls back to error dict instead of crashing the entire request.
     """
+    # Reload .env every call so no backend restart is needed
+    env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+    load_dotenv(env_path, override=True)
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY is not set in the .env file.")
+
+    client = genai.Client(api_key=api_key)
+
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=0.3,
+            ),
+        )
         text = response.text.strip()
 
         # Strip markdown fences if Gemini adds them despite JSON mode
