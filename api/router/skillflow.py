@@ -130,14 +130,4 @@ async def match_schemes(user_id: str):
     Return JSON: {{ "matches": [] }}
     """
     result = await call_gemini(prompt)
-    return result
- 0,
-          "reason": "string",
-          "nextStep": "string"
-        }}
-      ]
-    }}
-    Rank by eligibility. Return top 3 only.
-    """
-    result = await call_gemini(prompt)
-    return result
+    return result
