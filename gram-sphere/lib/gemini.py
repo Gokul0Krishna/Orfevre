@@ -1,4 +1,3 @@
-import google.generativeai as genai
 from google import genai
 from google.genai import types
 import json
@@ -49,7 +48,20 @@ async def call_gemini(prompt: str, media_bytes: list[bytes] = None, mime_type: s
     Call Gemini using the new google-genai SDK and parse the JSON response.
     Supports multi-modal input (images/videos).
     """
+    # Reload .env every call so no backend restart is needed
+    env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+    load_dotenv(env_path, override=True)
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY is not set in the .env file.")
+
+    client = genai.Client(api_key=api_key)
+
     try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt,
         contents = [prompt]
         if media_bytes:
             for b in media_bytes:
@@ -67,9 +79,8 @@ async def call_gemini(prompt: str, media_bytes: list[bytes] = None, mime_type: s
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 temperature=0.3,
-            )
+            ),
         )
-        
         text = response.text.strip()
 
         # Strip markdown fences if Gemini adds them despite JSON mode

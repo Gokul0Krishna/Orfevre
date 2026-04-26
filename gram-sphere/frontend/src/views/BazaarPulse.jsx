@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ShoppingBag, TrendingUp, Package, Plus, Search, Tag, Loader2, Sparkles, AlertCircle } from 'lucide-react';
 import { getDemandForecast, updateInventory, generateListing } from '../api';
-
-const CURRENT_USER_ID = 'user_007'; // A vendor ID from seed
+import { useAuth } from '../context/AuthContext';
 
 const BazaarPulse = () => {
+  const { user } = useAuth();
   const [inventory, setInventory] = useState([
     { id: 1, name: 'Hand-woven Silk Saree', stock: 12, price: 4500, category: 'Apparel' },
     { id: 2, name: 'Terracotta Vase', stock: 5, price: 850, category: 'Home Decor' },
@@ -24,14 +24,24 @@ const BazaarPulse = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  const handleUpdateStock = async (id, newStock) => {
+    const newInv = inventory.map(item => item.id === id ? { ...item, stock: newStock } : item);
+    setInventory(newInv);
+    try {
+      await updateInventory(user?.id || 'unknown', newInv);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const handleGenerateListing = async () => {
     if (!listingText) return;
     setGenLoading(true);
     try {
-      const res = await generateListing(CURRENT_USER_ID, listingText, 'Weaver', 'Mysuru');
-      setGeneratedListing(res);
-    } catch (err) {
-      console.error(err);
+      const result = await generateListing(user?.id || 'unknown', listingText, 'Weaver', 'Mysuru');
+      setGeneratedListing(result);
+    } catch (e) {
+      console.error(e);
     } finally {
       setGenLoading(false);
     }

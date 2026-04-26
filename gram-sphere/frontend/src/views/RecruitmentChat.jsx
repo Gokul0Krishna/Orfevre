@@ -277,12 +277,8 @@ const RecruitmentChat = () => {
       setCorrectedInput(data.corrected_input || text.trim());
       setStep('preview');
     } catch (e) {
-      const msg = e.message || '';
-      if (msg.includes('GEMINI_API_KEY') || msg.includes('API key')) {
-        setError('Gemini API key not set. Add GEMINI_API_KEY to your .env file and restart the backend.');
-      } else {
-        setError(`AI parsing failed: ${msg || 'Unknown error. Check the backend server.'}`);
-      }
+      const msg = e.message || 'Unknown error. Check the backend server.';
+      setError(`AI parsing failed: ${msg}`);
       setStep('idle');
     }
   };

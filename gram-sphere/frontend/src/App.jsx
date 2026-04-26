@@ -33,7 +33,7 @@ function AppContent() {
 
 function App() {
   return (
-    <GoogleOAuthProvider clientId="1034819862300-t43c6ahbdrh628iigdh80po94vatmq0l.apps.googleusercontent.com">
+    <GoogleOAuthProvider clientId="1071198674738-ltgfdrbur4vblqq0jh72j1h3odk8f874.apps.googleusercontent.com">
       <AuthProvider>
         <AppContent />
       </AuthProvider>

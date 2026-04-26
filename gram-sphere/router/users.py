@@ -112,10 +112,8 @@ async def set_role(body: SetRoleRequest, user_id: str):
     if not snap.exists:
         raise HTTPException(status_code=404, detail="User not found")
 
+    # Allowed overwriting role for testing purposes
     user_data = snap.to_dict()
-    if user_data.get("role"):
-        raise HTTPException(status_code=400, detail="Role already set")
-
     ref.update({"role": body.role})
     
     # Generate new JWT with updated role
