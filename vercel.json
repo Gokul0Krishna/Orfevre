@@ -1,0 +1,18 @@
+{
+  "builds": [
+    {
+      "src": "gram-sphere/main.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "gram-sphere/main.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "gram-sphere/main.py"
+    }
+  ]
+}
