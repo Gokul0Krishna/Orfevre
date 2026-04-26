@@ -1,0 +1,90 @@
+git switch -c <branch-name> to swith the branch
+git switch main to move to the main branch
+git merge <branch-name> to merge the switched branch with the main branchs
+run code: uvicorn main:app --reload --port 8000
+
+
+I have explored the **GramSphere** codebase located in the `gram-sphere` directory. This project is a FastAPI-powered backend designed for an informal economy platform, likely targeting artisans and vendors in Karnataka, India. It leverages **Firestore** for data storage, **NetworkX** for graph-based trust and network analytics, and **Google Gemini** for AI-driven insights and multilingual content generation.
+
+I have compiled a comprehensive report of the codebase below.
+
+### [GramSphere Codebase Report](file:///c:/Users/ASUS/OneDrive/Desktop/Orfevre/gram-sphere/README.md)
+
+---
+
+## 1. Application Entry Point
+### [`main.py`](file:///c:/Users/ASUS/OneDrive/Desktop/Orfevre/gram-sphere/main.py)
+The central entry point of the FastAPI application.
+- **Purpose**: Initializes the FastAPI app, configures CORS (allowing all origins), and mounts the various functional routers.
+- **Key Actions**:
+  - Sets up `CORSMiddleware`.
+  - Includes routers for `skillflow`, `creditweb`, `bazaarpulse`, and `gramlens` under the `/api` prefix.
+  - Defines a `/health` endpoint for status checks.
+- **Note**: There is an import discrepancy: it attempts to import from `routes`, but the directory is named `router`.
+
+---
+
+## 2. Library Modules (`lib/`)
+These files contain the core logic and external service integrations.
+
+### [`graph_engine.py`](file:///c:/Users/ASUS/OneDrive/Desktop/Orfevre/gram-sphere/lib/graph_engine.py)
+The "brain" of the platform, using the `networkx` library to perform social graph analysis.
+- **`build_graph()`**: Streams edges (relationships) from Firestore to build a directed graph.
+- **`compute_trust_score(user_id)`**: Calculates a trust score (0-100) using degree centrality (40%), recent activity (30%), and repayment rate (30%).
+- **`get_cluster_velocity()`**: Measures the growth rate of the network (edges created this week vs. last week).
+- **`detect_bridge_nodes()`**: Identifies "articulation points"—critical users whose removal would disconnect parts of the community.
+- **`get_neighbor_avg_trust(user_id)`**: Calculates the average trust score of a user's direct connections.
+
+### [`gemini.py`](file:///c:/Users/ASUS/OneDrive/Desktop/Orfevre/gram-sphere/lib/gemini.py)
+Handles communication with the Google Gemini AI model.
+- **`call_gemini(prompt)`**: Sends a prompt to `gemini-1.5-pro` and enforces a JSON response format. It includes error handling and cleaning for markdown fences.
+
+### [`firestore.py`](file:///c:/Users/ASUS/OneDrive/Desktop/Orfevre/gram-sphere/lib/firestore.py)
+- **Purpose**: Initializes the Firebase Admin SDK and provides the `db` client used throughout the application. It loads credentials from an environment variable.
+
+### [`scemes.py`](file:///c:/Users/ASUS/OneDrive/Desktop/Orfevre/gram-sphere/lib/scemes.py)
+- **Purpose**: A static data file containing a detailed text description of 10 Karnataka government schemes (e.g., PMEGP, Mudra, Stand-Up India).
+- **Note**: The filename contains a typo (`scemes` instead of `schemes`), which leads to an import error in `skillflow.py`.
+
+---
+
+## 3. API Routers (`router/`)
+Each router handles a specific domain of the platform.
+
+### [`skillflow.py`](file:///c:/Users/ASUS/OneDrive/Desktop/Orfevre/gram-sphere/router/skillflow.py)
+Manages gig work and skill development.
+- **`complete_gig`**: Marks a gig as done, awards skill tokens, records a "gig" edge in the graph, and triggers a trust score recomputation.
+- **`skill_gap`**: An AI endpoint that analyzes an artisan's current skills against their goals and district to recommend new skills or gigs.
+- **`match_schemes`**: Uses AI to match a user's profile (trade, trust score, gender) to relevant government schemes.
+
+### [`creditweb.py`](file:///c:/Users/ASUS/OneDrive/Desktop/Orfevre/gram-sphere/router/creditweb.py)
+Handles community-based lending and vouching.
+- **`apply_for_loan`**: An automated underwriter that decides on loan approval based on the user's trust score, their neighbors' trust scores, and their historical repayment rate.
+- **`vouch_for_borrower`**: Allows a high-trust user to "vouch" for another, creating a "vouch" edge in the graph and boosting the borrower's trust score by 8 points.
+
+### [`bazaarpulse.py`](file:///c:/Users/ASUS/OneDrive/Desktop/Orfevre/gram-sphere/router/bazaarpulse.py)
+Tools for vendors and market intelligence.
+- **`update_inventory`**: Logs stock levels and automatically generates "OVERSTOCK" discount coupons if stock exceeds 1.5x weekly sales.
+- **`demand_forecast`**: AI-driven prediction of demand based on local Karnataka festivals (e.g., Dasara, Ugadi) and current stock.
+- **`generate_listing`**: Generates marketplace descriptions in Kannada, Hindi, and English.
+- **`record_sale`**: Records transactions and contributes 1% of the sale to a "Cluster Commons Fund."
+
+### [`gramlens.py`](file:///c:/Users/ASUS/OneDrive/Desktop/Orfevre/gram-sphere/router/gramlens.py)
+Provides data for administrative dashboards and visualizations.
+- **`get_graph_data`**: Exports all nodes and edges for front-end tools like D3.js.
+- **`cluster_stats`**: Aggregates data for a specific district, showing total users, average trust, and top trades.
+
+---
+
+## 4. Auxiliary Scripts
+### [`scripts/seed_data.py`](file:///c:/Users/ASUS/OneDrive/Desktop/Orfevre/gram-sphere/scripts/seed_data.py)
+- **Purpose**: A utility script to populate a fresh Firestore database with 15 mock users and 40 random edges (gigs, loans, vouches, transactions) to test the graph algorithms.
+
+---
+
+### Key Observations & Potential Issues
+1. **Import Error**: `main.py` imports from `routes`, but the folder is named `router`.
+2. **Typo in `lib`**: `lib/scemes.py` should likely be renamed to `lib/schemes.py` to match the import in `skillflow.py`.
+3. **Database Dependencies**: The project requires a valid `FIREBASE_SERVICE_ACCOUNT_PATH` and `GEMINI_API_KEY` in a `.env` file to function.
+
+.\.venv\Scripts\python.exe gram-sphere\scripts\seed_mysuru.py
