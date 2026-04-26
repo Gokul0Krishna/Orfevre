@@ -102,6 +102,13 @@ const YouthHeader = ({ activeView, setActiveView }) => {
                 </button>
                 <div className="border-t border-gray-100 my-1"></div>
                 <button
+                  onClick={() => { updateRole(null); setShowMenu(false); }}
+                  className="w-full text-left px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 flex items-center gap-2"
+                >
+                  🔄 Switch Role
+                </button>
+                <div className="border-t border-gray-100 my-1"></div>
+                <button
                   onClick={() => { logout(); setShowMenu(false); }}
                   className="w-full text-left px-4 py-2 text-sm font-medium text-red-500 hover:bg-red-50 flex items-center gap-2"
                 >
