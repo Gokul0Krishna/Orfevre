@@ -1,25 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ShieldCheck, 
-  Upload, 
-  Award, 
-  History, 
-  CheckCircle2, 
-  XCircle, 
-  Info, 
-  MapPin, 
-  Camera, 
+import {
+  ShieldCheck,
+  Upload,
+  Award,
+  History,
+  CheckCircle2,
+  XCircle,
+  Info,
+  MapPin,
+  Camera,
   Video,
   ChevronRight,
   TrendingUp,
   Star
 } from 'lucide-react';
-import { 
-  getTrustScore, 
-  getTradeSkills, 
-  uploadWorkEvidence, 
-  uploadSkillTask, 
-  getWorkHistory 
+import {
+  getTrustScore,
+  getTradeSkills,
+  uploadWorkEvidence,
+  uploadSkillTask,
+  getWorkHistory
 } from '../api';
 import { useAuth } from '../context/AuthContext';
 
@@ -50,11 +50,11 @@ const VerificationDashboard = () => {
         getWorkHistory(user.id)
       ]);
       setTrustData(trust);
-      setHistory(historyRes.verified_work || []);
+      setHistory(historyRes.portfolio || [])
 
       // If user is a carpenter, fetch skills
       // In a real app, we'd get the trade from the user profile
-      const trade = user.trade || 'carpenter'; 
+      const trade = user.trade || 'carpenter';
       const skillsRes = await getTradeSkills(trade);
       setSkills(skillsRes);
     } catch (err) {
@@ -76,15 +76,15 @@ const VerificationDashboard = () => {
     try {
       const result = await uploadWorkEvidence(user.id, workDesc, selectedFile);
       if (result.success) {
-        setUploadStatus({ 
-          type: 'success', 
-          message: `Work verified! AI Confidence: ${result.confidence_score}%` 
+        setUploadStatus({
+          type: 'success',
+          message: `Work verified! AI Confidence: ${result.confidence_score}%`
         });
         fetchData(); // Refresh history and trust score
       } else {
-        setUploadStatus({ 
-          type: 'error', 
-          message: `Verification failed: ${result.error || result.reason || 'Trade mismatch'}` 
+        setUploadStatus({
+          type: 'error',
+          message: `Verification failed: ${result.error || result.reason || 'Trade mismatch'}`
         });
       }
     } catch (err) {
@@ -106,15 +106,15 @@ const VerificationDashboard = () => {
     try {
       const result = await uploadSkillTask(user.id, skillId, selectedFile);
       if (result.success) {
-        setUploadStatus({ 
-          type: 'success', 
-          message: `Congratulations! You earned the "${result.badge_awarded}" badge!` 
+        setUploadStatus({
+          type: 'success',
+          message: `Congratulations! You earned the "${result.badge_awarded}" badge!`
         });
         fetchData();
       } else {
-        setUploadStatus({ 
-          type: 'error', 
-          message: `Rejected: ${result.reason}` 
+        setUploadStatus({
+          type: 'error',
+          message: `Rejected: ${result.reason}`
         });
       }
     } catch (err) {
@@ -202,11 +202,10 @@ const VerificationDashboard = () => {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center space-x-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === tab.id 
-                ? 'bg-white text-indigo-600 shadow-sm' 
+            className={`flex items-center space-x-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === tab.id
+                ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-gray-500 hover:text-gray-700'
-            }`}
+              }`}
           >
             <tab.icon className="h-4 w-4" />
             <span>{tab.label}</span>
@@ -226,8 +225,8 @@ const VerificationDashboard = () => {
             <form onSubmit={handleWorkUpload} className="space-y-4">
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1.5">Work Description</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   placeholder="e.g., Hand-carved teak wood chair"
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
                   value={workDesc}
@@ -236,8 +235,8 @@ const VerificationDashboard = () => {
               </div>
 
               <div className="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center hover:border-indigo-400 transition-colors relative">
-                <input 
-                  type="file" 
+                <input
+                  type="file"
                   accept="image/*"
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   onChange={handleFileChange}
@@ -254,16 +253,15 @@ const VerificationDashboard = () => {
               </div>
 
               {uploadStatus && (
-                <div className={`p-4 rounded-xl flex items-start space-x-3 ${
-                  uploadStatus.type === 'error' ? 'bg-red-50 text-red-700' : 
-                  uploadStatus.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'
-                }`}>
+                <div className={`p-4 rounded-xl flex items-start space-x-3 ${uploadStatus.type === 'error' ? 'bg-red-50 text-red-700' :
+                    uploadStatus.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'
+                  }`}>
                   <Info className="h-5 w-5 mt-0.5 flex-shrink-0" />
                   <p className="text-sm font-medium">{uploadStatus.message}</p>
                 </div>
               )}
 
-              <button 
+              <button
                 disabled={loading || !selectedFile}
                 className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold shadow-lg shadow-indigo-100 hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center justify-center"
               >
@@ -285,10 +283,9 @@ const VerificationDashboard = () => {
                 <div key={skill.id} className="group p-5 rounded-2xl border border-gray-100 bg-gray-50 hover:bg-white hover:shadow-md transition-all border-l-4 border-l-indigo-600">
                   <div className="flex justify-between items-start mb-3">
                     <div>
-                      <span className={`text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded ${
-                        skill.difficulty === 'beginner' ? 'bg-green-100 text-green-700' :
-                        skill.difficulty === 'intermediate' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                      }`}>
+                      <span className={`text-[10px] uppercase tracking-widest font-bold px-2 py-0.5 rounded ${skill.difficulty === 'beginner' ? 'bg-green-100 text-green-700' :
+                          skill.difficulty === 'intermediate' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                        }`}>
                         {skill.difficulty}
                       </span>
                       <h4 className="font-bold text-gray-900 mt-1">{skill.title}</h4>
@@ -298,18 +295,18 @@ const VerificationDashboard = () => {
                   <p className="text-xs text-gray-500 mb-4 leading-relaxed">
                     Requirement: Upload a high-quality video showing you performing this specific joinery/task.
                   </p>
-                  
+
                   <div className="flex space-x-2">
                     <div className="flex-1 relative overflow-hidden bg-white rounded-lg border border-gray-200 px-3 py-2 text-xs font-medium text-gray-600">
-                      <input 
-                        type="file" 
-                        accept="video/*,image/*" 
+                      <input
+                        type="file"
+                        accept="video/*,image/*"
                         className="absolute inset-0 opacity-0 cursor-pointer"
                         onChange={handleFileChange}
                       />
                       {selectedFile ? 'File Ready' : 'Record/Select'}
                     </div>
-                    <button 
+                    <button
                       onClick={() => handleSkillTaskUpload(skill.id)}
                       disabled={loading}
                       className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-indigo-700 transition-colors"

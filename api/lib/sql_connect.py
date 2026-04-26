@@ -11,7 +11,7 @@ INSTANCE_CONNECTION_NAME = os.getenv("INSTANCE_CONNECTION_NAME")  # e.g. "projec
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASS = os.getenv("DB_PASS")
 DB_NAME = os.getenv("DB_NAME", "gramsphere")
-DB_URL = os.getenv("DATABASE_URL")
+DB_URL = os.getenv("DATABASE_URL", "postgresql://postgres:123456@34.47.182.248:5432/postgres")
 
 
 def _build_engine():

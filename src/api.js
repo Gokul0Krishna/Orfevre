@@ -5,8 +5,8 @@
  * The Vite proxy in vite.config.js forwards /api/* to http://127.0.0.1:8000
  */
 
-const API_BASE = import.meta.env.VITE_API_URL 
-  ? `${import.meta.env.VITE_API_URL}/api` 
+const API_BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL}/api`
   : '/api';
 
 // ─── Helper ────────────────────────────────────────────
@@ -39,7 +39,7 @@ export function getUser(userId) {
 }
 
 export function updateUser(userId, data) {
-  if (userId?.startsWith('guest_')) return Promise.resolve({ success: True });
+  if (userId?.startsWith('guest_')) return Promise.resolve({ success: true });
   return request(`/user/${userId}`, {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -79,7 +79,7 @@ export function uploadProof(userId, skill, file) {
   formData.append('skill', skill);
   formData.append('file', file);
 
-  return fetch('/api/upload-proof', {
+  return fetch(`${API_BASE}/upload-proof`, {
     method: 'POST',
     body: formData,
     // Note: Don't set Content-Type header manually for FormData, 

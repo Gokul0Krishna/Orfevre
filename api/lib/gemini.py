@@ -18,7 +18,7 @@ async def call_gemini(prompt: str, media_bytes: list[bytes] = None, mime_type: s
     env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
     load_dotenv(env_path, override=True)
 
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY", "AIzaSyBQcz4FghMdWZz_NTK8cJ4q7LwEi9VLOmk")
     if not api_key:
         raise ValueError("GEMINI_API_KEY is not set in the .env file.")
 
