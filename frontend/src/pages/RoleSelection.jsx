@@ -11,7 +11,7 @@ const RoleSelection = () => {
     setIsSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`http://localhost:8000/api/auth/set-role?user_id=${user.id}`, {
+      const res = await fetch(`/api/auth/set-role?user_id=${user.id}`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

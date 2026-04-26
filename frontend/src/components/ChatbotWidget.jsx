@@ -4,11 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { sendChatMessage } from '../api';
 
 const GREETINGS = {
-  en: "Hi! I'm Sahayak 👋\nI can help you navigate GramSphere. Ask me anything!",
-  hi: "नमस्ते! मैं सहायक हूँ 👋\nमैं GramSphere में आपकी मदद कर सकता हूँ।",
-  mr: "नमस्कार! मी सहायक आहे 👋\nमी GramSphere मध्ये तुम्हाला मदत करू शकतो.",
-  kn: "ನಮಸ್ಕಾರ! ನಾನು ಸಹಾಯಕ 👋\nGramSphere ನಲ್ಲಿ ನಿಮಗೆ ಸಹಾಯ ಮಾಡಬಲ್ಲೆ.",
-  ta: "வணக்கம்! நான் சஹாயக் 👋\nGramSphere-ல் உங்களுக்கு உதவ முடியும்.",
+  en: "Hi! I'm Sahayak 👋\nI can help you navigate YuvaShakti. Ask me anything!",
+  hi: "नमस्ते! मैं सहायक हूँ 👋\nमैं YuvaShakti में आपकी मदद कर सकता हूँ।",
+  mr: "नमस्कार! मी सहायक आहे 👋\nमी YuvaShakti मध्ये तुम्हाला मदत करू शकतो.",
+  kn: "ನಮಸ್ಕಾರ! ನಾನು ಸಹಾಯಕ 👋\nYuvaShakti ನಲ್ಲಿ ನಿಮಗೆ ಸಹಾಯ ಮಾಡಬಲ್ಲೆ.",
+  ta: "வணக்கம்! நான் சஹாயக் 👋\nYuvaShakti-ல் உங்களுக்கு உதவ முடியும்.",
 };
 
 const DEFAULT_SUGGESTIONS = {
@@ -150,7 +150,7 @@ const ChatbotWidget = () => {
             <div style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>Sahayak</div>
             <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#86EFAC', display: 'inline-block' }} />
-              GramSphere Assistant
+              YuvaShakti Assistant
             </div>
           </div>
           <button

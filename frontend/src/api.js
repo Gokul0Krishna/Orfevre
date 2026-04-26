@@ -1,5 +1,5 @@
 /**
- * api.js — Centralized API service layer for GramSphere frontend.
+ * api.js — Centralized API service layer for YuvaShakti frontend.
  *
  * All backend calls go through here.
  * The Vite proxy in vite.config.js forwards /api/* to http://127.0.0.1:8000

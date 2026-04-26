@@ -18,7 +18,7 @@ const LandingPage = () => {
       setAuthError(null);
       try {
         // Try to verify with backend first
-        const res = await fetch('http://localhost:8000/api/auth/google', {
+        const res = await fetch('/api/auth/google', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ credential: codeResponse.access_token })
