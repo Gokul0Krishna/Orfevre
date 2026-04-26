@@ -48,10 +48,8 @@ def _build_engine():
     # Direct connection via DATABASE_URL (local Postgres, Supabase, Neon, etc.)
     url = DB_URL
     if not url or url.strip() == "":
-        raise ValueError(
-            "Neither INSTANCE_CONNECTION_NAME nor DATABASE_URL is set in .env. "
-            "Please configure one of them."
-        )
+        print("WARNING: DATABASE_URL is not set. SQL features will be disabled.")
+        return None
     
     # SQLAlchemy requires 'postgresql://' but many providers give 'postgres://'
     if url.startswith("postgres://"):

@@ -1,23 +1,35 @@
 import pytest
 import os
-from lib.gemini import call_gemini
 import base64
+import json
+from pathlib import Path
+from typing import Dict, Any
 
+import google.generativeai as genai
+from lib.gemini import call_gemini
+from dotenv import load_dotenv
 
-# ── SKIP ALL IF NO API KEY ───────────────────────────────────────────
-pytestmark = pytest.mark.skipif(
-    not os.getenv("GEMINI_API_KEY"),
-    reason="GEMINI_API_KEY not set — skipping Gemini tests"
-)
+# Load .env explicitly for module-level skipif checks
+env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
+print(f"DEBUG: Gemini Key found: {bool(os.getenv('GEMINI_API_KEY'))}")
 
+# ── CONFIGURATION & ASSETS ───────────────────────────────────────────
+BASE_DIR = Path(__file__).resolve().parent
+ASSETS_DIR = BASE_DIR / "assets"
+REAL_PHOTO_PATH = ASSETS_DIR / "real_carpentry.jpg"
 
 class TestGeminiPrompts:
+    """
+    Tests for Gemini-powered features in the GramSphere ecosystem.
+    Verifies schema compliance and multi-modal capabilities.
+    """
 
     @pytest.mark.asyncio
     async def test_skill_gap_returns_expected_schema(self):
         """
-        Calls the real Gemini API with a carpenter profile.
-        Confirms the response matches the schema we expect.
+        Calls the Gemini API with a carpenter profile.
+        Confirms the response matches the expected JSON schema.
         """
         prompt = """
         You are an economic development advisor for Karnataka's informal economy.
@@ -36,19 +48,23 @@ class TestGeminiPrompts:
           "top_skill_to_learn": "string"
         }
         """
-        result = await call_gemini(prompt)
+        result: Dict[str, Any] = await call_gemini(prompt)
+
+        if "error" in result and "429" in result["error"]:
+            pytest.skip("Gemini API quota exceeded (429 RESOURCE_EXHAUSTED)")
 
         assert "error" not in result, f"Gemini returned error: {result}"
-        assert "skill_gaps"          in result
-        assert "recommended_gigs"    in result
-        assert "local_demand_context" in result
-        assert "top_skill_to_learn"  in result
+        required_keys = ["skill_gaps", "recommended_gigs", "local_demand_context", "top_skill_to_learn"]
+        for key in required_keys:
+            assert key in result, f"Missing key: {key}"
+        
         assert isinstance(result["skill_gaps"], list)
         assert len(result["skill_gaps"]) > 0
-        print(f"\nSkill gaps returned: {result['skill_gaps']}")
+        print(f"\n[DEBUG] Skill gaps: {result['skill_gaps']}")
 
     @pytest.mark.asyncio
     async def test_demand_forecast_returns_expected_schema(self):
+        """Verifies demand forecasting JSON structure."""
         prompt = """
         You are a market intelligence analyst for rural Karnataka.
 
@@ -71,17 +87,20 @@ class TestGeminiPrompts:
           "festivalAlert": "string or null"
         }
         """
-        result = await call_gemini(prompt)
+        result: Dict[str, Any] = await call_gemini(prompt)
+
+        if "error" in result and "429" in result["error"]:
+            pytest.skip("Gemini API quota exceeded (429 RESOURCE_EXHAUSTED)")
 
         assert "error" not in result
-        assert "forecast"       in result
-        assert "festivalAlert"  in result
+        assert "forecast" in result
+        assert "festivalAlert" in result
         assert isinstance(result["forecast"], list)
         assert len(result["forecast"]) > 0
-        print(f"\nFestival alert: {result['festivalAlert']}")
 
     @pytest.mark.asyncio
     async def test_listing_generator_returns_three_languages(self):
+        """Checks if listing generator returns Kannada, Hindi, and English versions."""
         prompt = """
         Generate a marketplace listing for:
         Product: handmade teak wood bookshelf
@@ -97,40 +116,38 @@ class TestGeminiPrompts:
           "highlights": ["string"]
         }
         """
-        result = await call_gemini(prompt)
+        result: Dict[str, Any] = await call_gemini(prompt)
 
-        assert "error"   not in result
-        assert "kannada" in result
-        assert "hindi"   in result
-        assert "english" in result
-        assert len(result["kannada"])  > 10
-        assert len(result["hindi"])    > 10
-        assert len(result["english"])  > 10
-        # print(f"\nKannada listing: {result['kannada'][:80]}...")
+        if "error" in result and "429" in result["error"]:
+            pytest.skip("Gemini API quota exceeded (429 RESOURCE_EXHAUSTED)")
+
+        assert "error" not in result
+        for lang in ["kannada", "hindi", "english"]:
+            assert lang in result
+            assert len(result[lang]) > 10
 
     @pytest.mark.asyncio
     @pytest.mark.skipif(
-        not os.path.exists("tests/assets/real_carpentry.jpg"),
-        reason="Real carpentry photo not provided"
+        not REAL_PHOTO_PATH.exists(),
+        reason=f"Real carpentry photo not found at {REAL_PHOTO_PATH}"
     )
     async def test_vision_assessment_real_photo(self):
         """
         Runs the actual Gemini Vision assessment on a real carpentry photo.
-        Add a photo to tests/assets/real_carpentry.jpg to enable this test.
+        Requires a photo at test/assets/real_carpentry.jpg.
         """
-        import google.generativeai as genai
-
-        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        api_key = os.getenv("GEMINI_API_KEY")
+        genai.configure(api_key=api_key)
+        
         model = genai.GenerativeModel(
-            "gemini-pro-latest",
+            "gemini-1.5-flash",  # Updated to modern flash model
             generation_config=genai.GenerationConfig(
                 response_mime_type="application/json",
                 temperature=0.2
             )
         )
 
-        with open("tests/assets/real_carpentry.jpg", "rb") as f:
-            image_bytes = f.read()
+        image_bytes = REAL_PHOTO_PATH.read_bytes()
 
         prompt = """
         You are a master carpenter and quality assessor.
@@ -152,16 +169,19 @@ class TestGeminiPrompts:
 
         image_part = {
             "mime_type": "image/jpeg",
-            "data":      base64.b64encode(image_bytes).decode()
+            "data": base64.b64encode(image_bytes).decode()
         }
+        
         response = model.generate_content([prompt, image_part])
-        import json
-        result   = json.loads(response.text)
+        try:
+            result = json.loads(response.text)
+        except Exception:
+            if "429" in response.text:
+                pytest.skip("Gemini API quota exceeded (429 RESOURCE_EXHAUSTED)")
+            raise
 
-        assert "overall_score"    in result
+        assert "overall_score" in result
         assert "complexity_level" in result
         assert 0 <= result["overall_score"] <= 100
-        print(f"\nAI overall score:   {result['overall_score']}")
-        print(f"Complexity level:   {result['complexity_level']}")
-        print(f"Assessor note:      {result['assessor_note']}")
-        print(f"Red flags:          {result['red_flags']}")
+        print(f"\n[DEBUG] AI overall score: {result['overall_score']}")
+        print(f"[DEBUG] Complexity: {result['complexity_level']}")

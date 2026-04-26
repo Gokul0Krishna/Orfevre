@@ -12,6 +12,8 @@ bridge_cache   = TTLCache(maxsize=1,  ttl=60)   # 60s TTL
 def build_graph() -> nx.DiGraph:
     """Fetch all edges from Firestore and build a NetworkX DiGraph."""
     G = nx.DiGraph()
+    if db is None:
+        return G
     edges_ref = db.collection("edges").stream()
     for doc in edges_ref:
         e = doc.to_dict()
@@ -64,7 +66,9 @@ def compute_trust_score(user_id: str) -> float:
     vouch_rate = min(len(employment_edges) / 5, 1.0) if employment_edges else 0.5
 
     # Pull certificate trust weight from Firestore
-    user_doc    = db.collection("users").document(user_id).get().to_dict() or {}
+    user_doc = {}
+    if db is not None:
+        user_doc = db.collection("users").document(user_id).get().to_dict() or {}
     cert_weight = user_doc.get("certTrustWeight", 0)   # 0.2 to 1.0
 
     # Blend into final score: certificate boosts the ceiling
@@ -95,7 +99,7 @@ def get_cluster_velocity() -> dict:
     this_week_start = now - timedelta(days=7)
     last_week_start = now - timedelta(days=14)
 
-    edges = db.collection("edges").stream()
+    edges = db.collection("edges").stream() if db is not None else []
     this_week = 0
     last_week = 0
 
@@ -125,7 +129,8 @@ def get_cluster_velocity() -> dict:
     }
 
     # Write to Firestore so frontend onSnapshot() picks it up
-    db.collection("analytics").document("velocity").set(result)
+    if db is not None:
+        db.collection("analytics").document("velocity").set(result)
 
     velocity_cache["velocity"] = result
     return result
@@ -164,7 +169,8 @@ def detect_bridge_nodes() -> list:
     top3 = results[:3]
 
     # Write to Firestore for frontend
-    db.collection("analytics").document("bridgeNodes").set({"nodes": top3})
+    if db is not None:
+        db.collection("analytics").document("bridgeNodes").set({"nodes": top3})
 
     bridge_cache["bridges"] = top3
     return top3
