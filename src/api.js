@@ -5,7 +5,9 @@
  * The Vite proxy in vite.config.js forwards /api/* to http://127.0.0.1:8000
  */
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_URL 
+  ? `${import.meta.env.VITE_API_URL}/api` 
+  : '/api';
 
 // ─── Helper ────────────────────────────────────────────
 async function request(url, options = {}) {

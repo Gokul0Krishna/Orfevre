@@ -18,7 +18,8 @@ const LandingPage = () => {
       setAuthError(null);
       try {
         // Try to verify with backend first
-        const res = await fetch('/api/auth/google', {
+        const API_URL = import.meta.env.VITE_API_URL || '';
+        const res = await fetch(`${API_URL}/api/auth/google`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ credential: codeResponse.access_token })

@@ -3,7 +3,7 @@ import { Bell, MapPin, LogOut } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const YouthHeader = ({ activeView, setActiveView }) => {
-  const { user, role, logout } = useAuth();
+  const { user, role, logout, updateRole } = useAuth();
   const [showMenu, setShowMenu] = React.useState(false);
   const [showNotifications, setShowNotifications] = React.useState(false);
 
