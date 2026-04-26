@@ -1,11 +1,51 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Smartphone } from 'lucide-react';
+import { useGoogleLogin } from '@react-oauth/google';
+import { useAuth } from '../context/AuthContext';
 import ChatbotWidget from '../components/ChatbotWidget';
 
-const LandingPage = ({ onLogin }) => {
+const LandingPage = () => {
+  const { login: authLogin } = useAuth();
   const [scrollState, setScrollState] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
+  const [authError, setAuthError] = useState(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const scrollContainerRef = useRef(null);
+
+  const login = useGoogleLogin({
+    onSuccess: async (codeResponse) => {
+      setIsLoggingIn(true);
+      setAuthError(null);
+      try {
+        // Try to verify with backend first
+        const res = await fetch('http://localhost:8000/api/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential: codeResponse.access_token })
+        });
+        const data = await res.json();
+        if (data.success) {
+          // Backend verified: use backend JWT
+          authLogin(data.token, data.user);
+        } else {
+          // Backend returned error: fallback to Google token directly
+          console.warn("Backend auth failed, using Google token as fallback:", data);
+          authLogin(codeResponse.access_token);
+        }
+      } catch (err) {
+        // Backend unreachable (not running): fallback to Google token directly
+        console.warn("Backend unreachable, using Google token as fallback:", err);
+        authLogin(codeResponse.access_token);
+      } finally {
+        setIsLoggingIn(false);
+      }
+    },
+    onError: (error) => {
+      console.error('Google Login Failed:', error);
+      setAuthError('Google sign-in failed. Please try again.');
+      setIsLoggingIn(false);
+    }
+  });
 
   useEffect(() => {
     setIsVisible(true);
@@ -53,7 +93,7 @@ const LandingPage = ({ onLogin }) => {
                 <polyline points="9 22 9 12 15 12 15 22"></polyline>
               </svg>
             </div>
-            <span className="text-white font-bold text-[24px] tracking-tight">GramSphere</span>
+            <span className="text-white font-bold text-[24px] tracking-tight">YuvaShakti</span>
           </div>
 
           {/* Right: Navigation & Actions */}
@@ -65,13 +105,13 @@ const LandingPage = ({ onLogin }) => {
             </nav>
             <div className="flex items-center gap-4">
               <button 
-                onClick={onLogin}
+                onClick={() => login()}
                 className="hidden sm:block bg-transparent border border-white/50 text-white px-5 py-2 rounded uppercase font-bold text-[14px] hover:bg-white/10 transition-colors"
               >
                 Login
               </button>
               <button 
-                onClick={onLogin}
+                onClick={() => login()}
                 className="bg-white text-gray-900 px-5 py-2 rounded uppercase font-bold text-[14px] hover:bg-gray-100 transition-colors shadow-sm"
               >
                 Sign Up
@@ -92,7 +132,7 @@ const LandingPage = ({ onLogin }) => {
         {/* Hero Content */}
         <div className="relative z-10 flex flex-col items-center w-full max-w-[1280px] mx-auto mt-12">
           <h1 className="text-[64px] md:text-[96px] font-bold text-white text-center leading-tight mb-16 tracking-tight pb-2">
-            GramSphere
+            YuvaShakti
           </h1>
           <p className="text-2xl md:text-[28px] text-gray-200 text-center mb-6 max-w-4xl font-medium leading-relaxed">
             Empowering local economies. Connect, showcase your skills, and grow your community.
@@ -102,9 +142,26 @@ const LandingPage = ({ onLogin }) => {
             Powered by Google Gemini — built for Bharat.
           </p>
 
-          <button onClick={onLogin} className="bg-[#007B55] hover:bg-[#006b47] text-white px-10 py-4 rounded-full font-bold transition-colors shadow-lg shadow-[#007B55]/40 text-[18px]">
-            Get Started Free
+          <button
+            onClick={() => login()}
+            disabled={isLoggingIn}
+            className="bg-[#007B55] hover:bg-[#006b47] disabled:bg-[#007B55]/60 disabled:cursor-wait text-white px-10 py-4 rounded-full font-bold transition-colors shadow-lg shadow-[#007B55]/40 text-[18px] flex items-center gap-3"
+          >
+            {isLoggingIn ? (
+              <>
+                <svg className="w-5 h-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+                Signing in...
+              </>
+            ) : (
+              <>Get Started Free</>
+            )}
           </button>
+          {authError && (
+            <p className="mt-4 text-red-400 text-sm font-medium bg-red-500/10 border border-red-400/30 px-4 py-2 rounded-lg">{authError}</p>
+          )}
         </div>
       </section>
 
@@ -277,7 +334,7 @@ const LandingPage = ({ onLogin }) => {
                   <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                   <polyline points="9 22 9 12 15 12 15 22"></polyline>
                 </svg>
-                <span className="text-[#1D1C1D] font-bold text-xl tracking-tight">GramSphere</span>
+                <span className="text-[#1D1C1D] font-bold text-xl tracking-tight">YuvaShakti</span>
               </div>
               <p className="text-gray-500 text-sm leading-relaxed">
                 Empowering local economies. Connect, showcase your skills, and grow your community in your own language.
@@ -320,7 +377,7 @@ const LandingPage = ({ onLogin }) => {
           
           {/* Bottom Bar */}
           <div className="border-t border-gray-200 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p className="text-gray-400 text-sm">© {new Date().getFullYear()} GramSphere Network. All rights reserved.</p>
+            <p className="text-gray-400 text-sm">© {new Date().getFullYear()} YuvaShakti Network. All rights reserved.</p>
             <div className="flex items-center gap-2 text-sm text-gray-400 font-medium">
               <span className="w-2 h-2 rounded-full bg-blue-500"></span>
               Powered by Google Gemini

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Mic, Search, ChevronRight, MapPin, Building, Briefcase, Filter, ArrowLeft, CheckCircle2, Loader2, ShieldCheck, Network } from 'lucide-react';
-import { getGigs, getSkillGap } from '../api';
+import { getGigs, getSkillGap, applyForGig, getMyApplications } from '../api';
 import LiveVerificationModal from '../components/LiveVerificationModal';
+import { useAuth } from '../context/AuthContext';
 
 // Fallback categories shown when no gigs exist in Firestore
 const defaultCategories = [
@@ -31,10 +32,19 @@ const JobConnect = () => {
   const [appliedGigs, setAppliedGigs] = useState(new Set());
   const [statusFilter, setStatusFilter] = useState('All');
   const [tokenFilter, setTokenFilter] = useState('Any');
+  const { user } = useAuth();
 
   // Fetch gigs from the backend on mount
   useEffect(() => {
     setLoading(true);
+    
+    // Fetch user's applied gigs to populate appliedGigs set
+    if (user?.id) {
+      getMyApplications(user.id).then(data => {
+        const apps = data.applications || [];
+        setAppliedGigs(new Set(apps.map(a => a.gig_id)));
+      }).catch(console.error);
+    }
     getGigs()
       .then((data) => {
         const fetchedGigs = data.gigs || [];
@@ -127,8 +137,16 @@ const JobConnect = () => {
           <LiveVerificationModal
             gig={applyingGig}
             onClose={() => setApplyingGig(null)}
-            onSuccess={(gig) => {
-              setAppliedGigs(prev => new Set([...prev, gig.id]));
+            onSuccess={async (gig) => {
+              if (user?.id) {
+                try {
+                  await applyForGig(gig.id, user.id);
+                  setAppliedGigs(prev => new Set([...prev, gig.id]));
+                } catch (e) {
+                  console.error("Failed to apply:", e);
+                  alert("Failed to apply. " + e.message);
+                }
+              }
               setApplyingGig(null);
             }}
           />

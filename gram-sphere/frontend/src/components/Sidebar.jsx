@@ -1,16 +1,26 @@
 import React from 'react';
-import { Home, Briefcase, Map, Target, User } from 'lucide-react';
+import { Home, Briefcase, Map, Target, User, Store, BarChart2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../context/AuthContext';
+import { canAccess } from '../utils/roleGuard';
 
 const Sidebar = ({ isOpen, onClose, activeView, setActiveView }) => {
   const { t } = useTranslation();
+  const { user, role } = useAuth();
 
-  const links = [
+  const allLinks = [
     { id: 'jobconnect', name: t('sidebar.jobconnect', 'JobConnect'), icon: Target },
-    { id: 'profile', name: t('sidebar.profile', 'Profile'), icon: User },
+    { id: 'youth_profile', name: t('sidebar.profile', 'My Profile'), icon: User },
+    { id: 'my_gigs', name: t('sidebar.my_gigs', 'My Gigs'), icon: Briefcase },
+    { id: 'merchant_home', name: t('sidebar.merchant_home', 'My Shop'), icon: Store },
+    { id: 'recruitment_chat', name: t('sidebar.recruitment', 'Recruitment'), icon: Target },
+    { id: 'applications', name: t('sidebar.applications', 'Applications'), icon: Briefcase },
     { id: 'bazaarpulse', name: t('sidebar.bazaarpulse', 'BazaarPulse'), icon: Briefcase },
     { id: 'gramlens', name: t('sidebar.gramlens', 'GramLens'), icon: Map },
+    { id: 'district_summary', name: t('sidebar.district_summary', 'District Summary'), icon: BarChart2 },
   ];
+
+  const links = allLinks.filter(link => canAccess(role, link.id));
 
   return (
     <>
@@ -37,7 +47,7 @@ const Sidebar = ({ isOpen, onClose, activeView, setActiveView }) => {
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
                 <polyline points="9 22 9 12 15 12 15 22"></polyline>
               </svg>
-              <span className="text-[#1D1C1D] font-bold tracking-tight text-lg">GramSphere</span>
+              <span className="text-[#1D1C1D] font-bold tracking-tight text-lg">YuvaShakti</span>
             </div>
           </div>
 
@@ -71,11 +81,11 @@ const Sidebar = ({ isOpen, onClose, activeView, setActiveView }) => {
           <div className="p-4 border-t border-gray-100 m-4 rounded-xl bg-gray-50">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-sm font-bold text-white shadow-sm">
-                U
+                {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
               </div>
               <div className="flex flex-col">
-                <span className="text-sm font-bold text-[#1D1C1D]">{t('sidebar.user_profile', 'User Profile')}</span>
-                <span className="text-xs font-medium text-gray-500">{t('sidebar.youth_account', 'Youth Account')}</span>
+                <span className="text-sm font-bold text-[#1D1C1D]">{user?.name || t('sidebar.user_profile', 'User Profile')}</span>
+                <span className="text-xs font-medium text-gray-500 capitalize">{role || t('sidebar.youth_account', 'Youth Account')}</span>
               </div>
             </div>
           </div>

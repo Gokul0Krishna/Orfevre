@@ -116,6 +116,59 @@ export function getGigs() {
   return request('/gigs');
 }
 
+export function applyForGig(gigId, youthUid) {
+  return request(`/gigs/${gigId}/apply`, {
+    method: 'POST',
+    body: JSON.stringify({ youth_uid: youthUid })
+  });
+}
+
+export function getGigApplications(gigId) {
+  return request(`/gigs/${gigId}/applications`);
+}
+
+export function acceptApplication(gigId, appId, merchantUid) {
+  return request(`/gigs/${gigId}/applications/${appId}/accept`, {
+    method: 'POST',
+    body: JSON.stringify({ merchant_uid: merchantUid })
+  });
+}
+
+export function getMyApplications(youthUid) {
+  return request(`/applications/mine?youth_uid=${youthUid}`);
+}
+
+// ─── Merchant Shop ──────────────────────────────────────────────────────────
+export function getMerchantShop(merchantUid) {
+  return request(`/merchant/shop?merchant_uid=${merchantUid}`);
+}
+
+export function saveMerchantShop(data) {
+  return request('/merchant/shop', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function getBusinessTypes() {
+  return request('/merchant/business-types');
+}
+
+// ─── Recruitment Chatbot ──────────────────────────────────────────────────
+export function parseGig(merchantUid, text) {
+  return request('/recruitment/parse-gig', {
+    method: 'POST',
+    body: JSON.stringify({ merchant_uid: merchantUid, text }),
+  });
+}
+
+export function postGig(data) {
+  return request('/recruitment/post-gig', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 // ─── Chatbot ───────────────────────────────────────────
 export function sendChatMessage(message, language = 'en') {
   return request('/chatbot', {

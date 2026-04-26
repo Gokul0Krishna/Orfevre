@@ -1,412 +1,307 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Upload, CheckCircle, ShieldCheck, Camera, 
-  MapPin, X, ThumbsUp, MessageSquare, Share2, MoreHorizontal, Loader2
-} from 'lucide-react';
-import { useTranslation } from 'react-i18next';
-import { getUser, updateUser, getSkillGap } from '../api';
-
-const CURRENT_USER_ID = 'user_001';
+import React, { useState, useEffect } from 'react';
+import { ShieldCheck, MapPin, Search, PlusCircle, CheckCircle, Clock, XCircle, ArrowRight } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { getGigs, getMyApplications, applyForGig, getUser } from '../api';
+import LiveVerificationModal from '../components/LiveVerificationModal';
 
 const Profile = () => {
-  const { t } = useTranslation();
-  const [isEditing, setIsEditing] = useState(false);
+  const { user, role } = useAuth();
+  const [activeTab, setActiveTab] = useState('gigs');
+  const [gigs, setGigs] = useState([]);
+  const [applications, setApplications] = useState([]);
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [profilePic, setProfilePic] = useState(null);
-  
-  const handleProfilePicUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setProfilePic(url);
-    }
-  };
-  
-  // Camera & Upload States
-  const [isUploading, setIsUploading] = useState(false);
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
-  const [stream, setStream] = useState(null);
-  const [showNewBadge, setShowNewBadge] = useState(false);
-  const [skillGapData, setSkillGapData] = useState(null);
-  // Guided wizard: 'idle' | 'camera' | 'analyzing' | 'done'
-  const [cameraStep, setCameraStep] = useState('idle');
-  
-  // Feed States
-  const [posts, setPosts] = useState([
-    {
-      id: 1,
-      image: 'https://images.unsplash.com/photo-1597872200969-2b65d56bd16b?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80',
-      location: { lat: '15.3647', lng: '75.1239', address: t('location.vidya_nagar', 'Vidya Nagar, Hubli') },
-      timestamp: '2 hours ago',
-      tags: ['#PCRepair', '#Hardware', '#Diagnostics'],
-      verified: true
-    }
-  ]);
+  const [applyingGig, setApplyingGig] = useState(null);
 
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-
-  const mockSkills = [
-    { name: t('skills.hardware_repair', 'Hardware Repair'), level: t('skills.expert', 'Expert'), verified: true },
-    { name: t('skills.network_setup', 'Network Setup'), level: t('skills.intermediate', 'Intermediate'), verified: true },
-    { name: t('skills.customer_service', 'Customer Service'), level: t('skills.advanced', 'Advanced'), verified: false },
-  ];
-
-  // Fetch user data from backend on mount
   useEffect(() => {
     setLoading(true);
-    getUser(CURRENT_USER_ID)
-      .then((data) => {
-        setUserData({
-          name: data.name || 'Unknown',
-          role: data.role || 'youth',
-          trade: data.trade || '',
-          district: data.district || '',
-          location: data.district || '',
-          trustScore: data.trustScore || 0,
-          skillTokens: data.skillTokens || 0,
-        });
-        setError(null);
-      })
-      .catch((err) => {
-        console.error('Failed to load profile:', err);
-        setError(err.message);
-        // Fallback to defaults
-        setUserData({
-          name: 'Raju Kumar',
-          role: t('roles.hardware_network_technician', 'Hardware & Network Technician'),
-          trade: t('skills.hardware_repair', 'Hardware Repair'),
-          district: t('location.hubli', 'Hubli'),
-          location: t('location.hubli_karnataka', 'Hubli, Karnataka'),
-          trustScore: 85,
-          skillTokens: 120,
-        });
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  // Fetch skill gap analysis
-  useEffect(() => {
-    if (userData && userData.trade && userData.district) {
-      getSkillGap(userData.trade, [], userData.district, 'improve earnings')
-        .then(setSkillGapData)
-        .catch((err) => console.error('Skill gap fetch failed:', err));
+    
+    // Fetch user details
+    if (user?.id) {
+      getUser(user.id).then(setUserData).catch(console.error);
+      getMyApplications(user.id).then(data => setApplications(data.applications || [])).catch(console.error);
     }
-  }, [userData?.trade, userData?.district]);
+    
+    // Fetch gigs for recommendations
+    getGigs().then(data => setGigs(data.gigs || [])).catch(console.error).finally(() => setLoading(false));
+  }, [user]);
 
-  // Camera logic ...
-  useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
+  // Derived state
+  const appliedGigIds = new Set(applications.map(a => a.gig_id));
+  const recommendedGigs = gigs.filter(g => g.status === 'open' && !appliedGigIds.has(g.id)).slice(0, 3);
+  
+  const pendingApps = applications.filter(a => a.status === 'pending');
+  const hiredApps = applications.filter(a => a.status === 'accepted');
+  const cancelledApps = applications.filter(a => a.status === 'auto_cancelled');
+
+  const handleApplySuccess = async (gig) => {
+    if (user?.id) {
+      try {
+        await applyForGig(gig.id, user.id);
+        // Refresh applications
+        const data = await getMyApplications(user.id);
+        setApplications(data.applications || []);
+      } catch (e) {
+        alert("Failed to apply. " + e.message);
+      }
     }
-  }, [stream, isCameraOpen]);
-
-  useEffect(() => {
-    return () => {
-      if (stream) stream.getTracks().forEach(track => track.stop());
-    };
-  }, [stream]);
-
-  const startCamera = async () => {
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      setStream(mediaStream);
-      setIsCameraOpen(true);
-      setCameraStep('camera');
-    } catch (err) {
-      alert("Please allow camera access.");
-    }
+    setApplyingGig(null);
   };
 
-  const stopCamera = () => {
-    if (stream) stream.getTracks().forEach(track => track.stop());
-    setStream(null);
-    setIsCameraOpen(false);
-    setCameraStep('idle');
+  const getStatusPill = (status) => {
+    if (status === 'accepted') return <span className="bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1"><CheckCircle className="w-3 h-3"/> Hired</span>;
+    if (status === 'pending') return <span className="bg-yellow-100 text-yellow-700 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1"><Clock className="w-3 h-3"/> Pending</span>;
+    if (status === 'auto_cancelled') return <span className="bg-gray-100 text-gray-500 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1"><XCircle className="w-3 h-3"/> Cancelled</span>;
+    return <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span> Open</span>;
   };
 
-  const handleCapture = () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0);
-    const photoData = canvas.toDataURL('image/jpeg');
-    stopCamera();
-    setIsUploading(true);
-    setCameraStep('analyzing');
-
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        pos => processPost(photoData, pos.coords),
-        () => processPost(photoData, null)
-      );
-    } else {
-      processPost(photoData, null);
-    }
-  };
-
-  const processPost = (photoData, coords) => {
-    setTimeout(() => {
-      setIsUploading(false);
-      setCameraStep('done');
-      setShowNewBadge(true);
-      setUserData(prev => ({ ...prev, skillTokens: prev.skillTokens + 10 }));
-      const newPost = {
-        id: Date.now(),
-        image: photoData,
-        location: coords ? { lat: coords.latitude.toFixed(4), lng: coords.longitude.toFixed(4), address: t('location.captured_location', 'Captured Location') } : { lat: t('location.unknown', 'Unknown'), lng: t('location.unknown', 'Unknown'), address: t('location.location_disabled', 'Location disabled') },
-        timestamp: 'Just now',
-        tags: ['#VerifiedSkill', '#AI_Approved'],
-        verified: true
-      };
-      setPosts([newPost, ...posts]);
-      // Reset wizard after 3s
-      setTimeout(() => setCameraStep('idle'), 3000);
-    }, 3000);
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await updateUser(CURRENT_USER_ID, {
-        name: userData.name,
-        role: userData.role,
-        location: userData.location,
-      });
-      setIsEditing(false);
-    } catch (err) {
-      alert('Failed to save profile.');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleChange = (e) => setUserData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-8 h-8 text-[#00875a] animate-spin" />
-        <span className="ml-3 text-gray-500 font-medium">{t('profile.loading', 'Loading profile...')}</span>
-      </div>
-    );
-  }
+  if (loading) return <div className="p-12 text-center text-gray-500">Loading Profile...</div>;
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto bg-transparent">
-      {error && (
-        <div className="bg-amber-50 border-b border-amber-200 px-6 py-3 text-sm text-amber-800 font-medium">
-          Could not connect to backend: {error}. Showing offline data.
-        </div>
+    <div className="pb-20 max-w-5xl mx-auto px-4 sm:px-6 mt-4">
+      
+      {/* Verification Modal */}
+      {applyingGig && (
+        <LiveVerificationModal
+          gig={applyingGig}
+          onClose={() => setApplyingGig(null)}
+          onSuccess={handleApplySuccess}
+        />
       )}
-      <div className="bg-transparent">
-        <div className="px-6 sm:px-8 pt-6 max-w-7xl mx-auto w-full">
-          <div className="w-full h-32 md:h-48 rounded-[24px] overflow-hidden relative shadow-sm">
-            <img src="/profile_img.png" alt="Profile Header" className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-black/40"></div>
+
+      {/* --- Profile Header (Card) --- */}
+      <div className="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 mb-6">
+        
+        {/* Top Banner */}
+        <div className="h-40 bg-gradient-to-r from-[#4F7942] to-[#809B53] relative overflow-hidden">
+          {/* Abstract circles pattern */}
+          <div className="absolute top-0 left-0 w-full h-full opacity-30">
+            <div className="absolute -top-20 -left-20 w-64 h-64 rounded-full bg-white/20"></div>
+            <div className="absolute top-10 left-1/3 w-80 h-80 rounded-full bg-white/10"></div>
+            <div className="absolute -bottom-20 -right-20 w-96 h-96 rounded-full bg-black/10"></div>
+          </div>
+          
+          {/* Trust Badge */}
+          <div className="absolute top-4 left-4 bg-[#00875a] text-white px-4 py-1.5 rounded-full font-bold shadow flex items-center gap-1">
+            <span className="text-yellow-300">⭐</span> Trust: {userData?.trustScore || 85}
+          </div>
+          
+          {/* Top Right Logo Watermark */}
+          <div className="absolute top-4 right-4 flex items-center gap-1.5 text-white/80">
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+            <span className="text-sm font-bold opacity-80">YuvaShakti</span>
           </div>
         </div>
-        <div className="max-w-4xl mx-auto px-6 sm:px-8 pb-8 relative">
-          <div className="absolute -top-12 border-4 border-white rounded-[20px] w-24 h-24 bg-blue-50 flex items-center justify-center text-4xl shadow-sm z-10 overflow-hidden relative group cursor-pointer">
-            <input type="file" accept="image/*" onChange={handleProfilePicUpload} className="absolute inset-0 opacity-0 cursor-pointer z-20" title="Change Profile Picture" />
-            {profilePic ? (
-              <img src={profilePic} alt="Profile DP" className="w-full h-full object-cover" />
-            ) : (
-              <span>👨‍🔧</span>
-            )}
-            <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
-              <Camera className="w-6 h-6 text-white mb-1" />
-              <span className="text-[10px] text-white font-bold uppercase tracking-wider">Change</span>
+
+        {/* Profile Info Section */}
+        <div className="px-6 relative pb-8">
+          {/* Avatar (Overlapping) */}
+          <div className="absolute -top-12 left-6 w-24 h-24 bg-[#1F2937] rounded-full border-4 border-white flex items-center justify-center text-3xl text-white font-bold shadow-sm z-10">
+            {userData?.name ? userData.name.split(' ').map(n=>n[0]).join('') : 'U'}
+            {/* Online Status Dot */}
+            <div className="absolute bottom-0 right-0 w-6 h-6 bg-white rounded-full flex items-center justify-center">
+              <div className="w-4 h-4 bg-green-500 rounded-full border border-white"></div>
             </div>
           </div>
-          <div className="pt-14 flex flex-col sm:flex-row justify-between items-start gap-4">
-            <div className="flex-1 w-full">
-              {isEditing ? (
-                <div className="space-y-3 w-full max-w-md">
-                  <input name="name" value={userData.name} onChange={handleChange} className="text-2xl font-extrabold text-gray-900 border-b-2 border-[#00875a] bg-transparent focus:outline-none w-full" placeholder="Your Name" />
-                  <input name="role" value={userData.role} onChange={handleChange} className="text-gray-600 font-medium border-b border-gray-300 bg-transparent focus:outline-none w-full" placeholder="Your Role" />
-                  <input name="location" value={userData.location} onChange={handleChange} className="text-sm text-gray-500 flex items-center gap-1 border-b border-gray-300 bg-transparent focus:outline-none w-full" placeholder="Your Location" />
-                </div>
-              ) : (
-                <div>
-                  <h1 className="text-2xl font-extrabold text-gray-900">{userData.name}</h1>
-                  <p className="text-gray-600 font-medium">{userData.trade} ({userData.role})</p>
-                  <p className="text-sm text-gray-500 mt-1 flex items-center gap-1">📍 {userData.location || userData.district}</p>
-                </div>
-              )}
+
+          {/* Action Buttons */}
+          <div className="flex justify-end pt-4 gap-3">
+            <button className="px-5 py-2 rounded-full border border-gray-200 text-sm font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+              ✏️ Edit Profile
+            </button>
+            <button className="px-5 py-2 rounded-full bg-[#1b4332] text-sm font-bold text-white hover:bg-[#153426] flex items-center gap-2 shadow-sm">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+              Share
+            </button>
+          </div>
+
+          {/* Text Info */}
+          <div className="mt-4">
+            <h1 className="text-2xl font-extrabold text-[#1D1C1D]">{userData?.name || 'User'}</h1>
+            <p className="text-sm text-gray-400 font-medium -mt-1 mb-2">राजू कुमार</p> {/* Hardcoded Hindi placeholder for demo */}
+            
+            <h2 className="text-gray-700 font-semibold">{userData?.trade || 'Hardware & Network Technician'}</h2>
+            <p className="text-xs text-gray-400 font-medium mb-3">हार्डवेयर और नेटवर्क तकनीशियन</p> {/* Hardcoded Hindi placeholder */}
+
+            <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
+              <MapPin className="w-4 h-4" /> {userData?.district || 'Hubli'}, Karnataka 
+              <span className="text-green-600 font-bold ml-2">• Available</span>
             </div>
-            <div className="flex flex-col items-end gap-2">
-              <div className="flex gap-2">
-                <span className="bg-emerald-50 text-emerald-700 text-sm font-bold px-3 py-1.5 rounded-lg border border-emerald-200">{t('profile.trust', 'Trust')}: {userData.trustScore}</span>
-              </div>
-              <div className="flex gap-2">
-                {isEditing ? (
-                  <>
-                    <button onClick={handleSave} disabled={saving} className="bg-[#007B55] text-white font-bold px-6 py-2 rounded-full hover:bg-[#006b47] shadow-sm transition-colors disabled:opacity-50">
-                      {saving ? 'Saving...' : t('profile.save_changes', 'Save Changes')}
-                    </button>
-                    <button onClick={() => setIsEditing(false)} className="bg-white border border-gray-200 text-gray-700 font-bold px-5 py-2 rounded-full hover:bg-gray-50 shadow-sm transition-colors">{t('profile.cancel', 'Cancel')}</button>
-                  </>
-                ) : (
-                  <button onClick={() => setIsEditing(true)} className="bg-white border border-gray-200 text-[#1D1C1D] font-bold px-5 py-2 rounded-full hover:bg-gray-50 shadow-sm transition-colors">{t('profile.edit_profile', 'Edit Profile')}</button>
-                )}
-              </div>
+
+            <div className="mt-5 bg-gray-50/50 p-4 rounded-xl border border-gray-100">
+              <p className="text-sm text-gray-700 font-medium leading-relaxed">
+                Experienced hardware repair technician with 4+ years in Hubli. Specialise in device repair, networking, and installations.
+              </p>
+              <p className="text-xs text-gray-400 italic mt-1">4+ साल का अनुभव। डिवाइस मरम्मत, नेटवर्किंग और इंस्टॉलेशन में विशेषज्ञ।</p>
+            </div>
+          </div>
+
+          {/* Stats Row */}
+          <div className="flex bg-gray-50 rounded-2xl p-4 mt-6 border border-gray-100">
+            <div className="flex-1 text-center border-r border-gray-200">
+              <div className="text-2xl font-extrabold text-[#1D1C1D]">{hiredApps.length || 34}</div>
+              <div className="text-xs font-bold text-gray-500 uppercase mt-0.5">Gigs Done</div>
+              <div className="text-[10px] text-gray-400">गिग पूरे</div>
+            </div>
+            <div className="flex-1 text-center border-r border-gray-200">
+              <div className="text-2xl font-extrabold text-[#1D1C1D]">{userData?.skillTokens || 7}</div>
+              <div className="text-xs font-bold text-gray-500 uppercase mt-0.5">Skill Tokens</div>
+              <div className="text-[10px] text-gray-400">कौशल टोकन</div>
+            </div>
+            <div className="flex-1 text-center">
+              <div className="text-2xl font-extrabold text-[#1D1C1D]">128</div>
+              <div className="text-xs font-bold text-gray-500 uppercase mt-0.5">Network</div>
+              <div className="text-[10px] text-gray-400">नेटवर्क</div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto w-full px-6 sm:px-8 py-8 grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div className="md:col-span-1 space-y-6">
-          <div className="bg-white border border-gray-100 rounded-[24px] p-6 shadow-sm sticky top-6">
-            <h2 className="text-lg font-bold text-[#1D1C1D] mb-4 flex items-center gap-2"><ShieldCheck className="w-5 h-5 text-blue-500" />{t('profile.verified_skills', 'Verified Skills')}</h2>
-            <p className="text-xs text-gray-500 mb-4 font-medium">{t('profile.skills_info', 'Skills marked with a blue badge are AI-verified using proof of work.')}</p>
-            <div className="space-y-3">
-              {mockSkills.map((skill) => (
-                <div key={skill.name} className="flex flex-col gap-1 pb-3 border-b border-gray-100 last:border-0 last:pb-0">
-                  <div className="flex items-center justify-between"><span className="font-bold text-gray-900">{skill.name}</span>{skill.verified && <CheckCircle className="w-4 h-4 text-blue-500" />}</div>
-                  <span className="text-xs font-semibold text-gray-500">{skill.level}</span>
-                </div>
-              ))}
-              {showNewBadge && (
-                <div className="flex flex-col gap-1 pt-3 border-t border-gray-100 animate-in fade-in zoom-in duration-500">
-                  <div className="flex items-center justify-between"><span className="font-bold text-gray-900">{t('profile.captured_skill', 'Captured Skill')}</span><CheckCircle className="w-4 h-4 text-blue-500" /></div>
-                  <span className="text-xs font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded w-max border border-green-100">{t('profile.newly_verified', 'Newly Verified!')}</span>
-                </div>
-              )}
+      {/* --- Tabs Section --- */}
+      <div className="flex bg-gray-50 rounded-full p-1.5 mb-6 shadow-inner border border-gray-200">
+        <button onClick={() => setActiveTab('gigs')} className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-full transition-all ${activeTab === 'gigs' ? 'bg-[#1a1727] text-white shadow-md' : 'text-gray-500 hover:bg-gray-200/50'}`}>
+          <span className="font-bold text-sm">Gigs</span>
+          <span className="text-[10px] opacity-70">गिग</span>
+        </button>
+        <button onClick={() => setActiveTab('applied')} className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-full transition-all ${activeTab === 'applied' ? 'bg-[#1a1727] text-white shadow-md' : 'text-gray-500 hover:bg-gray-200/50'}`}>
+          <span className="font-bold text-sm">Applied</span>
+          <span className="text-[10px] opacity-70">लागू</span>
+        </button>
+        <button onClick={() => setActiveTab('tokens')} className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-full transition-all ${activeTab === 'tokens' ? 'bg-[#1a1727] text-white shadow-md' : 'text-gray-500 hover:bg-gray-200/50'}`}>
+          <span className="font-bold text-sm">Tokens</span>
+          <span className="text-[10px] opacity-70">टोकन</span>
+        </button>
+        <button onClick={() => setActiveTab('activity')} className={`flex-1 flex flex-col items-center justify-center py-2.5 rounded-full transition-all ${activeTab === 'activity' ? 'bg-[#1a1727] text-white shadow-md' : 'text-gray-500 hover:bg-gray-200/50'}`}>
+          <span className="font-bold text-sm">Activity</span>
+          <span className="text-[10px] opacity-70">गतिविधि</span>
+        </button>
+      </div>
+
+      {/* --- Tab Content --- */}
+      
+      {activeTab === 'gigs' && (
+        <div className="space-y-6">
+          {/* Header Row */}
+          <div className="flex items-center justify-between px-2">
+            <div>
+              <h2 className="text-xl font-extrabold text-[#1D1C1D]">Gig Matches</h2>
+              <p className="text-xs text-gray-500 font-medium">गिग मिलान</p>
             </div>
+            <button className="bg-[#F4A935] hover:bg-[#d9962f] text-white px-4 py-2 rounded-full font-bold text-sm shadow-sm flex items-center gap-1.5 transition-colors">
+              🪄 Find gigs
+            </button>
           </div>
 
-          {skillGapData && skillGapData.skill_gaps && (
-            <div className="bg-white border border-gray-100 rounded-[24px] p-6 shadow-sm">
-              <h2 className="text-lg font-bold text-[#1D1C1D] mb-3">{t('profile.ai_recommendations', 'AI Skill Recommendations')}</h2>
-              <p className="text-xs text-gray-500 mb-3 font-medium">{skillGapData.local_demand_context}</p>
-              {skillGapData.top_skill_to_learn && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-3">
-                  <span className="text-xs font-bold text-emerald-700">{t('profile.top_skill', 'Top skill to learn:')}</span>
-                  <p className="text-sm font-semibold text-emerald-800 mt-0.5">{skillGapData.top_skill_to_learn}</p>
-                </div>
-              )}
-              <ul className="space-y-1">
-                {skillGapData.skill_gaps.map((gap, i) => (
-                  <li key={i} className="text-sm text-gray-700 flex items-start gap-2"><span className="text-amber-500 mt-0.5">&#9679;</span>{gap}</li>
+          {/* Active / Hired Gigs */}
+          {hiredApps.length > 0 && (
+            <div className="mb-6">
+              <h3 className="font-bold text-[#1D1C1D] text-lg mb-3 px-2">Active Gigs</h3>
+              <div className="space-y-4">
+                {hiredApps.map(app => (
+                  <div key={app.id} className="bg-white rounded-[20px] p-5 shadow-sm border-2 border-[#00875a] flex flex-col gap-4 relative overflow-hidden">
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#00875a]"></div>
+                    <div className="flex items-start justify-between">
+                      <div className="flex gap-4">
+                        <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center text-2xl border border-green-100">💼</div>
+                        <div>
+                          <h3 className="font-bold text-[#1D1C1D] text-lg leading-tight">{app.gig?.title || 'Active Gig'}</h3>
+                          <div className="flex items-center gap-3 text-sm text-gray-500 font-medium mt-1">
+                            <span className="flex items-center gap-1"><span className="text-gray-400">👤</span> {app.gig?.vendorId || 'Vendor'}</span>
+                            <span className="flex items-center gap-1"><MapPin className="w-3 h-3"/> Hired on {new Date(app.updated_at || app.applied_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                      {getStatusPill(app.status)}
+                    </div>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
           )}
-        </div>
 
-        <div className="md:col-span-2 space-y-6">
-          <div className="bg-white border border-gray-100 rounded-[24px] shadow-sm overflow-hidden">
-            {/* Step Indicator */}
-            {cameraStep !== 'idle' && (
-              <div className="flex items-center gap-0 border-b border-gray-100">
-                {[
-                  { key: 'camera', label: '📷 Open Camera', step: 1 },
-                  { key: 'analyzing', label: '🤖 AI Analyzes', step: 2 },
-                  { key: 'done', label: '✅ Posted!', step: 3 },
-                ].map((s, i) => {
-                  const stepOrder = { camera: 1, analyzing: 2, done: 3 };
-                  const currentOrder = stepOrder[cameraStep] || 0;
-                  const isActive = s.key === cameraStep;
-                  const isDone = currentOrder > s.step;
-                  return (
-                    <div key={s.key} className={`flex-1 py-4 px-2 text-center text-sm font-bold border-b-2 transition-colors ${
-                      isActive ? 'border-[#007B55] text-[#007B55] bg-green-50' :
-                      isDone ? 'border-blue-400 text-blue-500 bg-blue-50' :
-                      'border-transparent text-gray-400'
-                    }`}>
-                      {s.label}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            <div className="p-6 border-b border-gray-100 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-[12px] bg-blue-50 border border-blue-100 flex items-center justify-center text-xl">👨‍🔧</div>
-              <button onClick={startCamera} className="flex-1 text-left bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-full px-5 py-3 text-gray-500 font-medium transition-colors shadow-sm">{t('profile.upload_proof', 'Upload proof of work...')}</button>
-            </div>
-            {isUploading && (
-              <div className="p-8 flex flex-col items-center justify-center bg-gray-50">
-                <div className="w-10 h-10 border-4 border-[#00875a] border-t-transparent rounded-full animate-spin mb-3"></div>
-                <p className="font-bold text-[#00875a] text-center">{t('profile.analyzing', 'AI Analyzing Media & Location...')}</p>
-                <p className="text-xs text-gray-400 mt-1 text-center">Reading your location and detecting skills in the photo...</p>
-              </div>
-            )}
-            {cameraStep === 'done' && !isUploading && (
-              <div className="p-6 flex flex-col items-center justify-center bg-green-50">
-                <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-2">
-                  <CheckCircle className="w-7 h-7 text-[#00875a]" />
-                </div>
-                <p className="font-bold text-[#00875a] text-center">Post Uploaded & Verified!</p>
-                <p className="text-xs text-gray-500 mt-1 text-center">Your skill has been tagged and added to your profile.</p>
-              </div>
-            )}
-            {isCameraOpen && !isUploading && (
-              <div className="relative bg-black">
-                <video ref={videoRef} autoPlay playsInline muted className="w-full h-[400px] object-cover" />
-                <canvas ref={canvasRef} className="hidden" />
-                {/* Step 1 Guidance overlay */}
-                <div className="absolute top-3 left-3 right-3 bg-black/60 backdrop-blur-sm rounded-xl px-4 py-2 text-center">
-                  <p className="text-white text-sm font-bold">📷 Step 1: Point camera at your work, then tap the button below</p>
-                </div>
-                <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-between">
-                  <button onClick={stopCamera} className="w-10 h-10 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full flex items-center justify-center text-white transition-colors"><X className="w-5 h-5" /></button>
-                  <button onClick={handleCapture} className="w-16 h-16 border-4 border-white rounded-full flex items-center justify-center group"><div className="w-12 h-12 bg-white rounded-full group-hover:scale-90 transition-transform"></div></button>
-                  <div className="w-10 h-10"></div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-6">
-            {posts.map(post => (
-              <div key={post.id} className="bg-white border border-gray-100 rounded-[24px] shadow-sm overflow-hidden">
-                <div className="p-5 flex items-start justify-between">
+          {/* Canva Style Cards (Matches) */}
+          <div className="space-y-4">
+            {recommendedGigs.length === 0 ? (
+               <div className="bg-white rounded-2xl p-6 text-center text-gray-500 shadow-sm border border-gray-100">No matches found right now.</div>
+            ) : recommendedGigs.map((gig, idx) => (
+              <div key={gig.id} className={`bg-white rounded-[20px] p-5 shadow-sm border-2 flex flex-col gap-4 relative overflow-hidden transition-all hover:shadow-md ${idx === 0 ? 'border-[#F4A935]' : 'border-gray-100'}`}>
+                {/* Left Colored Accent Bar */}
+                <div className={`absolute left-0 top-0 bottom-0 w-1 ${idx === 0 ? 'bg-[#F4A935]' : 'bg-transparent'}`}></div>
+                
+                <div className="flex items-start justify-between">
                   <div className="flex gap-4">
-                    <div className="w-12 h-12 rounded-[12px] bg-blue-50 border border-blue-100 flex items-center justify-center text-xl">👨‍🔧</div>
+                    <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-2xl border border-blue-100">💻</div>
                     <div>
-                      <h3 className="font-bold text-[#1D1C1D] leading-tight text-lg">{userData.name}</h3>
-                      <p className="text-xs text-gray-500">{userData.role}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">{post.timestamp}</p>
+                      <h3 className="font-bold text-[#1D1C1D] text-lg leading-tight">{gig.title}</h3>
+                      <p className="text-xs text-gray-400 mb-2">लैपटॉप स्क्रीन बदलना</p>
+                      <div className="flex items-center gap-3 text-sm text-gray-500 font-medium">
+                        <span className="flex items-center gap-1"><span className="text-gray-400">👤</span> {gig.vendorId || 'Vendor'}</span>
+                        <span className="flex items-center gap-1"><MapPin className="w-3 h-3"/> {Math.floor(Math.random() * 5 + 1)}km</span>
+                        <span>2h ago</span>
+                      </div>
                     </div>
                   </div>
-                  <button className="text-gray-400 hover:text-gray-600"><MoreHorizontal className="w-5 h-5" /></button>
+                  {getStatusPill(gig.status || 'open')}
                 </div>
-                <div className="px-5 pb-4">
-                  <p className="text-gray-700 mb-3 leading-relaxed">{t('profile.post_desc', 'Just completed another task! Proof of work captured and verified.')}</p>
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {post.tags.map(tag => <span key={tag} className="text-blue-600 text-sm font-semibold hover:underline cursor-pointer">{tag}</span>)}
-                  </div>
-                </div>
-                <div className="relative">
-                  <img src={post.image} alt="Proof of work" className="w-full aspect-video object-cover bg-gray-100" />
-                  {post.verified && (
-                    <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-sm flex items-center gap-1.5 border border-gray-200">
-                      <ShieldCheck className="w-4 h-4 text-blue-500" />
-                      <span className="text-xs font-bold text-gray-900">{t('profile.ai_verified', 'AI Verified')}</span>
-                    </div>
-                  )}
-                  <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center gap-1.5 border border-white/10">
-                    <MapPin className="w-3.5 h-3.5 text-white" />
-                    <span className="text-xs font-medium text-white shadow-sm">{post.location.address} ({post.location.lat}, {post.location.lng})</span>
-                  </div>
-                </div>
-                <div className="px-4 py-3 border-t border-gray-100 flex justify-between">
-                  <button className="flex items-center gap-2 text-gray-500 hover:bg-gray-50 px-3 py-2 rounded-lg font-medium text-sm transition-colors flex-1 justify-center"><ThumbsUp className="w-5 h-5" /> {t('profile.like', 'Like')}</button>
-                  <button className="flex items-center gap-2 text-gray-500 hover:bg-gray-50 px-3 py-2 rounded-lg font-medium text-sm transition-colors flex-1 justify-center"><MessageSquare className="w-5 h-5" /> {t('profile.comment', 'Comment')}</button>
-                  <button className="flex items-center gap-2 text-gray-500 hover:bg-gray-50 px-3 py-2 rounded-lg font-medium text-sm transition-colors flex-1 justify-center"><Share2 className="w-5 h-5" /> {t('profile.share', 'Share')}</button>
+
+                <div className="flex items-center justify-between mt-2 pt-2">
+                  <div className="text-xl font-extrabold text-[#00875a]">₹{gig.budget || '800'}</div>
+                  <button onClick={() => setApplyingGig(gig)} className="bg-[#F4A935] hover:bg-[#d9962f] text-white font-bold py-2 px-6 rounded-full text-sm shadow-sm transition-colors flex items-center gap-1.5">
+                    Accept &rarr;
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         </div>
-      </div>
+      )}
+
+      {activeTab === 'applied' && (
+        <div className="space-y-6">
+           <div className="px-2">
+              <h2 className="text-xl font-extrabold text-[#1D1C1D]">My Applications</h2>
+              <p className="text-xs text-gray-500 font-medium">मेरे आवेदन</p>
+            </div>
+            {applications.length === 0 ? (
+               <div className="bg-white rounded-2xl p-6 text-center text-gray-500 shadow-sm border border-gray-100">No applications yet.</div>
+            ) : applications.map((app) => (
+              <div key={app.id} className={`bg-white rounded-[20px] p-5 shadow-sm border-2 flex flex-col gap-4 relative overflow-hidden transition-all hover:shadow-md ${app.status === 'accepted' ? 'border-[#00875a]' : 'border-gray-100'}`}>
+                {app.status === 'accepted' && <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#00875a]"></div>}
+                
+                <div className="flex items-start justify-between">
+                  <div className="flex gap-4">
+                    <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-2xl border border-gray-200">💼</div>
+                    <div>
+                      <h3 className="font-bold text-[#1D1C1D] text-lg leading-tight">{app.gig?.title || 'Gig Application'}</h3>
+                      <p className="text-xs text-gray-400 mb-2">Applied on {new Date(app.applied_at).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  {getStatusPill(app.status)}
+                </div>
+              </div>
+            ))}
+        </div>
+      )}
+
+      {activeTab === 'tokens' && (
+         <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-gray-100">
+           <div className="text-6xl mb-4">⭐</div>
+           <h3 className="text-2xl font-bold text-gray-900">Skill Tokens</h3>
+           <p className="text-gray-500 mt-2">You have {userData?.skillTokens || 7} tokens. Complete gigs and verify skills to earn more.</p>
+         </div>
+      )}
+
+      {activeTab === 'activity' && (
+         <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-gray-100">
+           <div className="text-6xl mb-4">📷</div>
+           <h3 className="text-xl font-bold text-gray-900">Proof of Work Feed</h3>
+           <p className="text-gray-500 mt-2">Upload photos of your completed jobs to build your AI-verified portfolio.</p>
+           <button className="mt-6 bg-[#007B55] text-white px-6 py-3 rounded-full font-bold flex items-center gap-2 mx-auto">
+             <PlusCircle className="w-5 h-5"/> Add Work Photo
+           </button>
+         </div>
+      )}
+
     </div>
   );
 };

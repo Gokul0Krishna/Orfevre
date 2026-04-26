@@ -1,6 +1,6 @@
-# GramSphere - Informal Economy Trust Network
+# YuvaShakti - Informal Economy Trust Network
 
-GramSphere is a decentralized trust and economic management platform for Karnataka's informal economy. It uses AI and Graph Theory to empower artisans, youth, and local vendors.
+YuvaShakti is a decentralized trust and economic management platform for Karnataka's informal economy. It uses AI and Graph Theory to empower artisans, youth, and local vendors.
 
 ---
 
