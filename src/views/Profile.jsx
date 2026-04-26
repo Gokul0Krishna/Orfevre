@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, MapPin, Search, PlusCircle, CheckCircle, Clock, XCircle, ArrowRight } from 'lucide-react';
+import { ShieldCheck, MapPin, Search, PlusCircle, CheckCircle, Clock, XCircle, ArrowRight, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getGigs, getMyApplications, applyForGig, getUser } from '../api';
 import LiveVerificationModal from '../components/LiveVerificationModal';
@@ -12,6 +12,8 @@ const Profile = () => {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [applyingGig, setApplyingGig] = useState(null);
+  const [proofLoading, setProofLoading] = useState(false);
+  const [proofResult, setProofResult] = useState(null);
 
   useEffect(() => {
     setLoading(true);
@@ -292,56 +294,107 @@ const Profile = () => {
       )}
 
       {activeTab === 'activity' && (
-         <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-gray-100">
-           <div className="text-6xl mb-4">📷</div>
-           <h3 className="text-xl font-bold text-gray-900">Proof of Work Feed</h3>
-           <p className="text-gray-500 mt-2">Upload photos of your completed jobs to build your AI-verified portfolio.</p>
-           
-           <input 
-             type="file" 
-             id="proof-upload" 
-             className="hidden" 
-             accept="image/*"
-             onChange={async (e) => {
-               const file = e.target.files[0];
-               if (!file) return;
+         <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-gray-100">
+           {!proofResult ? (
+             <>
+               <div className="text-6xl mb-4">📷</div>
+               <h3 className="text-xl font-bold text-gray-900">Proof of Work Feed</h3>
+               <p className="text-gray-500 mt-2">Upload photos of your completed jobs to build your AI-verified portfolio.</p>
                
-               const desc = prompt("What does this photo show? (e.g. Completed teak wood table)");
-               if (!desc) return;
+               <input 
+                 type="file" 
+                 id="proof-upload" 
+                 className="hidden" 
+                 accept="image/*"
+                 onChange={async (e) => {
+                   const file = e.target.files[0];
+                   if (!file) return;
+                   
+                   const desc = prompt("What does this photo show? (e.g. Completed teak wood table)");
+                   if (!desc) return;
 
-               setLoading(true);
-               try {
-                 const { uploadWorkEvidence } = await import('../api');
-                 const result = await uploadWorkEvidence(user.id, desc, file);
-                 
-                 if (result.success) {
-                   alert(`✅ Verified!\nAI Confidence: ${result.confidence_score}%\nMatch: ${result.ai_match}\nGeo-Verified: ${result.geo_verified ? 'Yes' : 'No'}`);
-                   // Refresh profile data
-                   window.location.reload(); 
-                 } else {
-                   alert("❌ Verification Failed: " + (result.error || "Low AI confidence"));
-                 }
-               } catch (err) {
-                 console.error(err);
-                 alert("Error uploading proof. Please try again.");
-               } finally {
-                 setLoading(false);
-               }
-             }}
-           />
+                   setProofLoading(true);
+                   try {
+                     const { uploadWorkEvidence } = await import('../api');
+                     const result = await uploadWorkEvidence(user?.id || 'guest_1', desc, file);
+                     setProofResult(result);
+                     
+                     if (result.success && user?.id) {
+                       getUser(user.id).then(setUserData).catch(console.error);
+                     }
+                   } catch (err) {
+                     console.error(err);
+                     setProofResult({ success: false, error: "Error uploading proof. Please try again." });
+                   } finally {
+                     setProofLoading(false);
+                   }
+                 }}
+               />
 
-           <button 
-             onClick={() => document.getElementById('proof-upload').click()}
-             disabled={loading}
-             className="mt-6 bg-[#007B55] hover:bg-[#006b47] text-white px-6 py-3 rounded-full font-bold flex items-center gap-2 mx-auto transition-colors disabled:opacity-50"
-           >
-             {loading ? <Loader2 className="w-5 h-5 animate-spin"/> : <PlusCircle className="w-5 h-5"/>}
-             {loading ? "Analyzing with AI..." : "Add Work Photo"}
-           </button>
-           
-           <p className="text-[10px] text-gray-400 mt-4 uppercase tracking-widest font-bold">
-             AI automatically checks tools, trade matching, and GPS location
-           </p>
+               <button 
+                 onClick={() => document.getElementById('proof-upload').click()}
+                 disabled={proofLoading}
+                 className="mt-6 bg-[#007B55] hover:bg-[#006b47] text-white px-6 py-3 rounded-full font-bold flex items-center gap-2 mx-auto transition-colors disabled:opacity-50"
+               >
+                 {proofLoading ? <Loader2 className="w-5 h-5 animate-spin"/> : <PlusCircle className="w-5 h-5"/>}
+                 {proofLoading ? "Analyzing with AI..." : "Add Work Photo"}
+               </button>
+               
+               <p className="text-[10px] text-gray-400 mt-4 uppercase tracking-widest font-bold">
+                 AI automatically checks tools, trade matching, and GPS location
+               </p>
+             </>
+           ) : (
+             <div className="text-left">
+               <div className="flex items-center justify-between mb-6">
+                 <h3 className="text-xl font-bold text-gray-900">AI Verification Result</h3>
+                 <button onClick={() => setProofResult(null)} className="text-gray-400 hover:text-gray-600">
+                   <XCircle className="w-6 h-6"/>
+                 </button>
+               </div>
+               
+               <div className={`p-6 rounded-xl border-2 ${proofResult.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                 <div className="flex items-center gap-3 mb-4">
+                   {proofResult.success ? (
+                     <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-green-600">
+                       <CheckCircle className="w-6 h-6"/>
+                     </div>
+                   ) : (
+                     <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center text-red-600">
+                       <XCircle className="w-6 h-6"/>
+                     </div>
+                   )}
+                   <div>
+                     <h4 className={`text-lg font-bold ${proofResult.success ? 'text-green-800' : 'text-red-800'}`}>
+                       {proofResult.success ? 'Proof Verified Successfully!' : 'Verification Failed'}
+                     </h4>
+                     <p className={`text-sm ${proofResult.success ? 'text-green-600' : 'text-red-600'}`}>
+                       {proofResult.success ? 'Your work has been added to your portfolio.' : (proofResult.error || 'Low AI confidence score.')}
+                     </p>
+                   </div>
+                 </div>
+
+                 <div className="space-y-3 bg-white p-4 rounded-lg border border-gray-100 shadow-sm">
+                   <div className="flex justify-between items-center">
+                     <span className="text-sm text-gray-500 font-medium">AI Match</span>
+                     <span className="text-sm font-bold text-gray-900 capitalize">{proofResult.ai_match || 'No'}</span>
+                   </div>
+                   <div className="flex justify-between items-center">
+                     <span className="text-sm text-gray-500 font-medium">Confidence Score</span>
+                     <span className="text-sm font-bold text-gray-900">{proofResult.confidence_score || 0}%</span>
+                   </div>
+                   <div className="flex justify-between items-center">
+                     <span className="text-sm text-gray-500 font-medium">Geo-Verified</span>
+                     <span className="text-sm font-bold text-gray-900">{proofResult.geo_verified ? 'Yes' : 'No'}</span>
+                   </div>
+                 </div>
+
+                 <button onClick={() => setProofResult(null)} className={`w-full mt-6 py-3 rounded-xl font-bold transition-colors ${proofResult.success ? 'bg-[#007B55] hover:bg-[#006b47] text-white' : 'bg-red-600 hover:bg-red-700 text-white'}`}>
+                   {proofResult.success ? 'Upload Another' : 'Try Again'}
+                 </button>
+               </div>
+             </div>
+           )}
          </div>
       )}
 

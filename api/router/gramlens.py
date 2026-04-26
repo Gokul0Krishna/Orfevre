@@ -16,12 +16,47 @@ router = APIRouter()
 async def get_graph_data():
     """Returns all nodes and edges for D3 visualization."""
     with engine.connect() as conn:
-        users = conn.execute(text("SELECT * FROM users")).fetchall()
-        edges = conn.execute(text("SELECT * FROM edges")).fetchall()
+        users_result = conn.execute(text("""
+            SELECT u.id, u.full_name, u.role, u.trust_score, u.current_district, 
+                   s.skill_type, m.business_type, m.shop_latitude, m.shop_longitude
+            FROM users u
+            LEFT JOIN user_skills s ON u.id = s.user_id AND s.is_primary_skill = TRUE
+            LEFT JOIN merchants m ON u.id = m.user_id
+        """)).fetchall()
         
+        edges_result = conn.execute(text("SELECT * FROM edges")).fetchall()
+        
+    formatted_nodes = []
+    for u in users_result:
+        trade = (u.business_type if u.role == 'merchant' else u.skill_type) or 'unknown'
+        # Basic mapping to cert tier based on trust score for demo purposes
+        score = float(u.trust_score or 20)
+        certTier = 'master' if score > 85 else ('gold' if score > 70 else 'silver')
+        formatted_nodes.append({
+            "id": str(u.id),
+            "name": u.full_name or "Unknown User",
+            "role": u.role or "worker",
+            "trade": trade.lower(),
+            "trustScore": score,
+            "certTier": certTier,
+            "district": u.current_district or "Mysuru",
+            "lat": float(u.shop_latitude) if u.shop_latitude else None,
+            "lng": float(u.shop_longitude) if u.shop_longitude else None
+        })
+
+    formatted_edges = []
+    for e in edges_result:
+        formatted_edges.append({
+            "id": str(e.id),
+            "fromUserId": str(e.from_user_id),
+            "toUserId": str(e.to_user_id),
+            "type": e.type or "gig",
+            "weight": float(e.weight or 1.0)
+        })
+
     return {
-        "nodes": [dict(u._mapping) for u in users], 
-        "edges": [dict(e._mapping) for e in edges]
+        "nodes": formatted_nodes,
+        "edges": formatted_edges
     }
 
 
