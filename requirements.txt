@@ -14,7 +14,7 @@ httpx
 pytest
 pytest-asyncio
 pg8000
-google-cloud-sql-connector
+cloud-sql-python-connector
 python-multipart
 jwt
 python-jose
