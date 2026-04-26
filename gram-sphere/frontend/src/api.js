@@ -65,21 +65,6 @@ export function matchSchemes(userId) {
   return request(`/match-schemes/${userId}`);
 }
 
-// ─── CreditWeb ─────────────────────────────────────────
-export function applyForLoan(userId, amount, purpose, duration) {
-  return request('/loan/apply', {
-    method: 'POST',
-    body: JSON.stringify({ userId, amount, purpose, duration }),
-  });
-}
-
-export function vouchForBorrower(voucherId, borrowerId) {
-  return request('/loan/vouch', {
-    method: 'POST',
-    body: JSON.stringify({ voucherId, borrowerId }),
-  });
-}
-
 // ─── BazaarPulse ───────────────────────────────────────
 export function updateInventory(vendorId, products) {
   return request('/inventory/update', {

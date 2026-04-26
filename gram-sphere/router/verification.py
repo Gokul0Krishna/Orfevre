@@ -374,7 +374,7 @@ async def _run_gemini_assessment(
     """
 
     model = genai.GenerativeModel(
-        model_name="gemini-1.5-pro",
+        model_name="gemini-pro-latest",
         generation_config=genai.GenerationConfig(
             response_mime_type="application/json",
             temperature=0.2

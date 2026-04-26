@@ -30,7 +30,7 @@ def compute_trust_score(user_id: str) -> float:
     Trust score = weighted sum of:
       - Degree centrality         (40%)
       - Recent activity (7 days)  (30%)
-      - Repayment rate            (30%)
+      - Vouch/employment rate     (30%)
     Returns a score from 0–100.
     """
     if user_id in trust_cache:
@@ -56,25 +56,29 @@ def compute_trust_score(user_id: str) -> float:
     )
     recent_score = min(recent / 10, 1.0)   # cap at 10 recent edges
 
-    # 3. Repayment rate — completed loan edges / total loan edges
-    loan_edges = [
+    # 3. Employment/vouch rate — ratio of employment or vouch edges
+    employment_edges = [
         d for _, _, d in G.edges(user_id, data=True)
-        if d.get("type") == "loan"
+        if d.get("type") in ("employment", "vouch", "gig")
     ]
-    if loan_edges:
-        repayment_rate = sum(
-            1 for d in loan_edges if d.get("weight", 0) >= 1.0
-        ) / len(loan_edges)
-    else:
-        repayment_rate = 1.0   # no loans = no defaults = full score
+    vouch_rate = min(len(employment_edges) / 5, 1.0) if employment_edges else 0.5
 
-    score = (
-        degree_score   * 0.4 +
-        recent_score   * 0.3 +
-        repayment_rate * 0.3
+    # Pull certificate trust weight from Firestore
+    user_doc    = db.collection("users").document(user_id).get().to_dict() or {}
+    cert_weight = user_doc.get("certTrustWeight", 0)   # 0.2 to 1.0
+
+    # Blend into final score: certificate boosts the ceiling
+    base_score = (
+        degree_score * 0.4 +
+        recent_score * 0.3 +
+        vouch_rate   * 0.3
     ) * 100
 
-    result = round(min(score, 100.0), 1)
+    # Certificate acts as a multiplier on top, adds up to 25 points
+    cert_boost  = cert_weight * 25
+    final_score = min(base_score + cert_boost, 100)
+
+    result = round(final_score, 1)
     trust_cache[user_id] = result
     return result
 

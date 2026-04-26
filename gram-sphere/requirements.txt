@@ -8,7 +8,9 @@ cachetools
 python-multipart
 gunicorn
 uvicorn
-
+pytest
+pytest-asyncio
+httpx
 python-multipart
 Pillow
 geopy
