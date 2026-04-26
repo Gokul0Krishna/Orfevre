@@ -1,5 +1,6 @@
 from fastapi import APIRouter
-from lib.firestore import db
+from sqlalchemy import text
+from lib.sql_connect import engine
 from lib.graph_engine import (
     get_cluster_velocity,
     detect_bridge_nodes,
@@ -14,15 +15,14 @@ router = APIRouter()
 @router.get("/graph/data")
 async def get_graph_data():
     """Returns all nodes and edges for D3 visualization."""
-    users = [
-        {"id": d.id, **d.to_dict()}
-        for d in db.collection("users").stream()
-    ]
-    edges = [
-        {"id": d.id, **d.to_dict()}
-        for d in db.collection("edges").stream()
-    ]
-    return {"nodes": users, "edges": edges}
+    with engine.connect() as conn:
+        users = conn.execute(text("SELECT * FROM users")).fetchall()
+        edges = conn.execute(text("SELECT * FROM edges")).fetchall()
+        
+    return {
+        "nodes": [dict(u._mapping) for u in users], 
+        "edges": [dict(e._mapping) for e in edges]
+    }
 
 
 # ── GET /graph/velocity ──────────────────────────────────
@@ -40,13 +40,18 @@ async def bridge_nodes():
 # ── GET /cluster/{district}/stats ────────────────────────
 @router.get("/cluster/{district}/stats")
 async def cluster_stats(district: str):
-    users = [
-        {"id": d.id, **d.to_dict()} for d in
-        db.collection("users").where("district", "==", district).stream()
-    ]
+    with engine.connect() as conn:
+        users = conn.execute(text("""
+            SELECT u.*, s.skill_type as trade 
+            FROM users u
+            LEFT JOIN user_skills s ON u.id = s.user_id AND s.is_primary_skill = TRUE
+            WHERE u.current_district = :district
+        """), {"district": district}).fetchall()
 
-    all_edges = list(db.collection("edges").stream())
-    total_edges = len(all_edges)
+        all_edges_result = conn.execute(text("SELECT COUNT(*) FROM edges")).scalar()
+        total_edges = all_edges_result or 0
+        
+        all_users_count = conn.execute(text("SELECT COUNT(*) FROM users")).scalar() or 0
 
     if not users:
         return {
@@ -56,15 +61,15 @@ async def cluster_stats(district: str):
         }
 
     n = len(users)
-    avg_trust = round(sum(u.get("trustScore", 0) for u in users) / n, 1)
+    avg_trust = round(sum(float(u.trust_score or 0) for u in users) / n, 1)
 
     trade_counts = defaultdict(int)
     for u in users:
-        trade_counts[u.get("trade", "unknown")] += 1
-    top_trade = max(trade_counts, key=trade_counts.get)
+        trade = getattr(u, 'trade', 'unknown') or 'unknown'
+        trade_counts[trade] += 1
+    top_trade = max(trade_counts, key=trade_counts.get) if trade_counts else "N/A"
 
     # Network density: actual_edges / max_possible_edges (across full network)
-    all_users_count = len(list(db.collection("users").stream()))
     max_edges = max(all_users_count * (all_users_count - 1), 1)
     density = round(total_edges / max_edges, 4)
 
@@ -79,4 +84,5 @@ async def cluster_stats(district: str):
         "top_trade":      top_trade,
         "velocity_score": velocity["score"],
         "velocity_trend": velocity["trend"],
-    }
+    }
+

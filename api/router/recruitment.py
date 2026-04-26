@@ -1,9 +1,11 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from lib.firestore import db
+from sqlalchemy import text
+from lib.sql_connect import engine
 from lib.gemini import call_gemini
 from typing import Optional
 import datetime
+import uuid
 
 router = APIRouter()
 
@@ -30,25 +32,18 @@ class PostGigRequest(BaseModel):
 async def parse_gig(body: ParseGigRequest):
     """
     Use Gemini to extract a structured gig posting from merchant's natural-language speech.
-    Step 1: Clean/correct the speech transcript (handles filler words, ASR errors).
-    Step 2: Extract structured gig data from the cleaned text.
     """
-    # Fetch merchant's shop context to enrich the prompt
+    # Fetch merchant's shop context from SQL
     shop_context = ""
-    shops = db.collection("shops").where("merchant_uid", "==", body.merchant_uid).stream()
-    for doc in shops:
-        s = doc.to_dict()
-        shop_context = f"Shop: {s.get('shop_name')}, Trade: {s.get('business_type')}, Location: {s.get('area')}, {s.get('district')}"
-        break
+    with engine.connect() as conn:
+        shop = conn.execute(text("SELECT shop_name, business_type, shop_district FROM merchants WHERE user_id = :uid"), {"uid": body.merchant_uid}).fetchone()
+        if shop:
+            shop_context = f"Shop: {shop.shop_name}, Trade: {shop.business_type}, District: {shop.shop_district}"
 
     # ── Step 1: Grammar + ASR correction ──────────────────────────────────
     correction_prompt = f"""
     The following text was spoken by an Indian merchant into a voice recorder.
-    It may contain speech recognition errors, filler words like "so", "um", "uh",
-    repetitions, or Hinglish (Hindi-English mix).
-    
-    Clean it up into clear, grammatical English while preserving all the key facts
-    (job type, duration, location, budget). Do not add or infer new information.
+    Clean it up into clear, grammatical English.
     
     Original: "{body.text}"
     
@@ -57,49 +52,31 @@ async def parse_gig(body: ParseGigRequest):
     """
     
     correction = await call_gemini(correction_prompt)
-    if "error" in correction:
-        # If correction fails, use original text
-        corrected_text = body.text
-    else:
-        corrected_text = correction.get("corrected", body.text)
+    corrected_text = correction.get("corrected", body.text)
 
     # ── Step 2: Extract structured gig from corrected text ─────────────────
     prompt = f"""
-You are a recruitment assistant for YuvaShakti, a platform connecting rural Indian youth with local artisan merchants in Karnataka.
-
+You are a recruitment assistant for YuvaShakti.
 Merchant context: {shop_context if shop_context else "Small business in Karnataka"}
 Merchant's request (cleaned): "{corrected_text}"
 
-Extract the structured job posting. Be smart — infer missing fields from context.
-- For budget: extract the rupee amount as a string like "₹1200". If not mentioned, use "Negotiable".
-- For duration: extract like "2 days" or "4 hours". If not mentioned, use "1 day".
-- For district: use what's mentioned. If a city/town name is given that isn't a Karnataka district, map it to the nearest Karnataka district or keep the name as-is.
-- For trade: pick from: Tailor, Carpenter, Electronics Repair, Potter, Weaver, Cobbler, Blacksmith, Farmer, Plumbing, Painting, Photography, General Labour, Other.
-- For slots: how many workers needed. Default 1.
+Extract the structured job posting. 
+- Pick trade from: Tailor, Carpenter, Electronics Repair, Potter, Weaver, Cobbler, Blacksmith, Farmer, Plumbing, Painting, Photography, General Labour, Other.
 
 Return ONLY valid JSON:
 {{
-  "title": "short job title, max 6 words",
-  "trade": "trade category from the list",
-  "description": "1-2 sentence job description in clear English",
-  "district": "district or city name",
-  "area": "locality or area name, empty string if unknown",
-  "budget": "₹XXXX or Negotiable",
-  "duration": "X days or X hours",
+  "title": "short job title",
+  "trade": "trade category",
+  "description": "1-2 sentence description",
+  "district": "district name",
+  "area": "area name",
+  "budget": "₹XXXX",
+  "duration": "X days",
   "slots": 1,
-  "tokens_reward": 1,
-  "confidence": 0.9,
-  "corrected_input": "{corrected_text}"
+  "tokens_reward": 1
 }}
 """
     result = await call_gemini(prompt)
-    
-    if "error" in result:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Gemini parsing failed: {result['error']}"
-        )
-
     return {"success": True, "parsed": result, "corrected_input": corrected_text}
 
 
@@ -107,34 +84,35 @@ Return ONLY valid JSON:
 @router.post("/recruitment/post-gig")
 async def post_gig(body: PostGigRequest):
     """
-    Save the confirmed gig to Firestore.
+    Save the confirmed gig to SQL.
     """
-    # Fetch shop ID
+    gig_id = str(uuid.uuid4())
+    
+    # Fetch shop ID if not provided
     shop_id = body.shop_id
-    if not shop_id:
-        shops = db.collection("shops").where("merchant_uid", "==", body.merchant_uid).stream()
-        for doc in shops:
-            shop_id = doc.id
-            break
+    with engine.connect() as conn:
+        if not shop_id:
+            shop = conn.execute(text("SELECT id FROM merchants WHERE user_id = :uid"), {"uid": body.merchant_uid}).fetchone()
+            if shop:
+                shop_id = shop.id
 
-    gig_data = {
-        "merchant_uid": body.merchant_uid,
-        "shop_id": shop_id,
-        "title": body.title,
-        "trade": body.trade,
-        "description": body.description,
-        "district": body.district,
-        "area": body.area,
-        "budget": body.budget,
-        "duration": body.duration,
-        "slots": body.slots,
-        "tokensReward": body.tokens_reward,
-        "status": "open",
-        "hired": [],
-        "created_at": datetime.datetime.utcnow().isoformat(),
-    }
+        conn.execute(text("""
+            INSERT INTO gigs (id, merchant_uid, shop_id, title, trade, description, district, area, budget, duration, slots, tokens_reward, status)
+            VALUES (:id, :m_uid, :s_id, :title, :trade, :desc, :dist, :area, :budget, :dur, :slots, :tokens, 'open')
+        """), {
+            "id": gig_id,
+            "m_uid": body.merchant_uid,
+            "s_id": shop_id,
+            "title": body.title,
+            "trade": body.trade,
+            "desc": body.description,
+            "dist": body.district,
+            "area": body.area,
+            "budget": body.budget,
+            "dur": body.duration,
+            "slots": body.slots,
+            "tokens": body.tokens_reward
+        })
+        conn.commit()
 
-    ref = db.collection("gigs").document()
-    ref.set(gig_data)
-
-    return {"success": True, "gig_id": ref.id, "gig": gig_data}
+    return {"success": True, "gig_id": gig_id}

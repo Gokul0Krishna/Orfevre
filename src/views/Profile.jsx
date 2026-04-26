@@ -296,9 +296,52 @@ const Profile = () => {
            <div className="text-6xl mb-4">📷</div>
            <h3 className="text-xl font-bold text-gray-900">Proof of Work Feed</h3>
            <p className="text-gray-500 mt-2">Upload photos of your completed jobs to build your AI-verified portfolio.</p>
-           <button className="mt-6 bg-[#007B55] text-white px-6 py-3 rounded-full font-bold flex items-center gap-2 mx-auto">
-             <PlusCircle className="w-5 h-5"/> Add Work Photo
+           
+           <input 
+             type="file" 
+             id="proof-upload" 
+             className="hidden" 
+             accept="image/*"
+             onChange={async (e) => {
+               const file = e.target.files[0];
+               if (!file) return;
+               
+               const desc = prompt("What does this photo show? (e.g. Completed teak wood table)");
+               if (!desc) return;
+
+               setLoading(true);
+               try {
+                 const { uploadWorkEvidence } = await import('../api');
+                 const result = await uploadWorkEvidence(user.id, desc, file);
+                 
+                 if (result.success) {
+                   alert(`✅ Verified!\nAI Confidence: ${result.confidence_score}%\nMatch: ${result.ai_match}\nGeo-Verified: ${result.geo_verified ? 'Yes' : 'No'}`);
+                   // Refresh profile data
+                   window.location.reload(); 
+                 } else {
+                   alert("❌ Verification Failed: " + (result.error || "Low AI confidence"));
+                 }
+               } catch (err) {
+                 console.error(err);
+                 alert("Error uploading proof. Please try again.");
+               } finally {
+                 setLoading(false);
+               }
+             }}
+           />
+
+           <button 
+             onClick={() => document.getElementById('proof-upload').click()}
+             disabled={loading}
+             className="mt-6 bg-[#007B55] hover:bg-[#006b47] text-white px-6 py-3 rounded-full font-bold flex items-center gap-2 mx-auto transition-colors disabled:opacity-50"
+           >
+             {loading ? <Loader2 className="w-5 h-5 animate-spin"/> : <PlusCircle className="w-5 h-5"/>}
+             {loading ? "Analyzing with AI..." : "Add Work Photo"}
            </button>
+           
+           <p className="text-[10px] text-gray-400 mt-4 uppercase tracking-widest font-bold">
+             AI automatically checks tools, trade matching, and GPS location
+           </p>
          </div>
       )}
 

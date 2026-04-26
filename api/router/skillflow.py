@@ -1,18 +1,18 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
-from lib.firestore import db
+from sqlalchemy import text
+from lib.sql_connect import engine
 from lib.graph_engine import compute_trust_score, get_cluster_velocity
-import os
+from typing import Optional
 from datetime import datetime
+import uuid
 
 router = APIRouter()
-
 
 class GigCompleteRequest(BaseModel):
     gigId:    str
     youthId:  str
     vendorId: str
-
 
 class SkillGapRequest(BaseModel):
     trade:         str
@@ -24,59 +24,36 @@ class SkillGapRequest(BaseModel):
 # ── POST /complete-gig ───────────────────────────────────
 @router.post("/complete-gig")
 async def complete_gig(body: GigCompleteRequest):
-    # 1. Mark gig as completed
-    gig_ref = db.collection("gigs").document(body.gigId)
-    gig_ref.update({"status": "completed", "completedAt": datetime.utcnow()})
+    with engine.connect() as conn:
+        # 1. Mark gig as completed
+        conn.execute(text("UPDATE gigs SET status = 'completed' WHERE id = :id"), {"id": body.gigId})
+        
+        gig = conn.execute(text("SELECT tokens_reward FROM gigs WHERE id = :id"), {"id": body.gigId}).fetchone()
+        tokens_reward = gig.tokens_reward if gig else 1
 
-    gig_data = gig_ref.get().to_dict()
-    tokens_reward = gig_data.get("tokensReward", 1)
+        # 2. Award skill tokens to youth
+        conn.execute(text("UPDATE users SET skill_tokens = skill_tokens + :gain WHERE id = :id"), {"gain": tokens_reward, "id": body.youthId})
+        
+        # 3. Write gig edge to SQL (employment_records)
+        record_id = str(uuid.uuid4())
+        conn.execute(text("""
+            INSERT INTO employment_records (id, user_id, job_title, start_date, end_date, status)
+            VALUES (:id, :u_id, 'Gig Completion', :now, :now, 'completed')
+        """), {"id": record_id, "u_id": body.youthId, "now": datetime.utcnow()})
+        
+        conn.commit()
 
-    # 2. Award skill token to youth
-    youth_ref  = db.collection("users").document(body.youthId)
-    youth_snap = youth_ref.get().to_dict()
-    new_tokens = youth_snap.get("skillTokens", 0) + tokens_reward
-    youth_ref.update({"skillTokens": new_tokens})
-
-    # 3. Write gig edge to Firestore
-    #    Cloud Function will ALSO fire on this write and recompute scores
-    db.collection("edges").add({
-        "fromUserId": body.youthId,
-        "toUserId":   body.vendorId,
-        "type":       "gig",
-        "weight":     1.0,
-        "createdAt":  datetime.utcnow()
-    })
-
-    # 4. Recompute trust scores for both users
-    #    Invalidate cache by deleting keys before recomputing
-    from lib.graph_engine import trust_cache
+    # Invalidate graph cache
+    from lib.graph_engine import trust_cache, velocity_cache
     trust_cache.pop(body.youthId,  None)
     trust_cache.pop(body.vendorId, None)
-
-    youth_score  = compute_trust_score(body.youthId)
-    vendor_score = compute_trust_score(body.vendorId)
-
-    # 5. Update trust scores in Firestore
-    youth_ref.update({"trustScore": youth_score})
-    db.collection("users").document(body.vendorId)\
-      .update({"trustScore": vendor_score})
-
-    # 6. Check if vendor's marketplace listing gate unlocks (score >= 40)
-    marketplace_unlocked = vendor_score >= 40
-
-    # 7. Recalculate Cluster Velocity
-    from lib.graph_engine import velocity_cache
     velocity_cache.clear()
-    velocity = get_cluster_velocity()
 
     return {
-        "success":            True,
-        "skillTokensEarned":  tokens_reward,
-        "totalSkillTokens":   new_tokens,
-        "youthTrustScore":    youth_score,
-        "vendorTrustScore":   vendor_score,
-        "marketplaceUnlocked": marketplace_unlocked,
-        "clusterVelocity":    velocity
+        "success": True,
+        "skillTokensEarned": tokens_reward,
+        "youthTrustScore": compute_trust_score(body.youthId),
+        "vendorTrustScore": compute_trust_score(body.vendorId)
     }
 
 
@@ -88,37 +65,28 @@ async def upload_proof(
 ):
     """
     Receives a photo/video proof of work. 
-    Updates the user's skill tokens in Firestore upon success.
+    Updates the user's skill tokens in SQL upon success.
     """
-    # 1. Read file (in real app, save to cloud storage and call Gemini Vision)
-    _contents = await file.read()
-    
-    # 2. Update Firestore: Increment tokens
-    user_ref = db.collection("users").document(userId)
-    user_snap = user_ref.get()
-    
-    if not user_snap.exists:
-        raise HTTPException(status_code=404, detail="User not found")
+    with engine.connect() as conn:
+        # 1. Update user tokens
+        conn.execute(text("UPDATE users SET skill_tokens = skill_tokens + 1 WHERE id = :id"), {"id": userId})
         
-    old_tokens = user_snap.to_dict().get("skillTokens", 0)
-    new_tokens = old_tokens + 1
-    user_ref.update({
-        "skillTokens": new_tokens,
-        "lastVerifiedSkill": skill
-    })
-    
-    # 3. Add to a "proofs" collection for tracking
-    db.collection("proofs").add({
-        "userId": userId,
-        "skill": skill,
-        "fileName": file.filename,
-        "timestamp": datetime.utcnow()
-    })
+        # 2. Add to skill_media
+        media_id = str(uuid.uuid4())
+        conn.execute(text("""
+            INSERT INTO skill_media (id, user_id, work_description, status, created_at)
+            VALUES (:id, :u_id, :desc, 'pending', :now)
+        """), {
+            "id": media_id,
+            "u_id": userId,
+            "desc": f"Proof for {skill}",
+            "now": datetime.utcnow()
+        })
+        conn.commit()
 
     return {
         "success": True,
-        "message": f"AI verified your {skill} work!",
-        "totalTokens": new_tokens
+        "message": f"AI received your {skill} work!",
     }
 
 
@@ -128,22 +96,12 @@ async def skill_gap(body: SkillGapRequest):
     from lib.gemini import call_gemini
 
     prompt = f"""
-    You are an economic development advisor for Karnataka's informal economy.
-    Analyze this artisan's skill gaps against current local market demand.
-
-    Profile:
-    - Trade: {body.trade}
-    - Current skills: {', '.join(body.currentSkills)}
-    - District: {body.district}
-    - Goal: {body.goal}
-
-    Return ONLY valid JSON with this exact schema:
-    {{
-      "skill_gaps": ["string"],
-      "recommended_gigs": [{{"title": "string", "requiredSkill": "string", "matchScore": 0}}],
-      "local_demand_context": "string",
-      "top_skill_to_learn": "string"
-    }}
+    Analyze this artisan's skill gaps.
+    Trade: {body.trade}
+    District: {body.district}
+    Skills: {', '.join(body.currentSkills)}
+    
+    Return JSON: {{ "skill_gaps": [], "recommended_gigs": [], "local_demand_context": "", "top_skill_to_learn": "" }}
     """
     result = await call_gemini(prompt)
     return result
@@ -155,32 +113,25 @@ async def match_schemes(user_id: str):
     from lib.schemes import KARNATAKA_SCHEMES
     from lib.gemini import call_gemini
 
-    user_snap = db.collection("users").document(user_id).get()
-    if not user_snap.exists:
+    with engine.connect() as conn:
+        user = conn.execute(text("SELECT full_name, trust_score, skill_tokens FROM users WHERE id = :id"), {"id": user_id}).fetchone()
+    
+    if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user = user_snap.to_dict()
-
     prompt = f"""
-    You are a government scheme advisor for Karnataka.
-    Match this artisan to the most relevant Karnataka government schemes.
+    Match this artisan to Karnataka government schemes.
+    Name: {user.full_name}
+    Trust Score: {user.trust_score}
+    Tokens: {user.skill_tokens}
 
-    Artisan profile:
-    - Trade: {user.get('trade')}
-    - District: {user.get('district')}
-    - Trust Score: {user.get('trustScore', 0)}
-    - Skill Tokens: {user.get('skillTokens', 0)}
-    - Gender: {user.get('gender', 'not specified')}
-
-    Available schemes:
-    {KARNATAKA_SCHEMES}
-
-    Return ONLY valid JSON:
-    {{
-      "matches": [
-        {{
-          "schemeName": "string",
-          "eligibilityPercent": 0,
+    Schemes: {KARNATAKA_SCHEMES}
+    
+    Return JSON: {{ "matches": [] }}
+    """
+    result = await call_gemini(prompt)
+    return result
+ 0,
           "reason": "string",
           "nextStep": "string"
         }}

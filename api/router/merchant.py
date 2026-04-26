@@ -1,8 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from lib.firestore import db
+from sqlalchemy import text
+from lib.sql_connect import engine
 from typing import Optional
 import datetime
+import uuid
 
 router = APIRouter()
 
@@ -23,71 +25,64 @@ class ShopRequest(BaseModel):
     phone: str
     lat: Optional[float] = None
     lon: Optional[float] = None
-    open_time: Optional[str] = "9:00 AM"
-    close_time: Optional[str] = "6:00 PM"
-    days_open: Optional[list] = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-    shop_image: Optional[str] = ""  # base64 data URL
 
 # -- GET /merchant/shop -------------------------------------------------------
 @router.get("/merchant/shop")
 async def get_shop(merchant_uid: str):
-    """Get merchant's shop profile."""
-    shops = db.collection("shops").where("merchant_uid", "==", merchant_uid).stream()
-    for doc in shops:
-        data = doc.to_dict()
-        data["id"] = doc.id
-        return {"success": True, "shop": data}
+    """Get merchant's shop profile from SQL."""
+    with engine.connect() as conn:
+        shop = conn.execute(text("SELECT * FROM merchants WHERE user_id = :uid"), {"uid": merchant_uid}).fetchone()
+        if shop:
+            return {"success": True, "shop": dict(shop._mapping)}
     return {"success": True, "shop": None}
 
 
 # -- POST /merchant/shop -------------------------------------------------------
 @router.post("/merchant/shop")
 async def save_shop(body: ShopRequest):
-    """Create or update merchant's shop profile."""
+    """Create or update merchant's shop profile in SQL."""
     if body.business_type not in BUSINESS_TYPES:
         raise HTTPException(status_code=400, detail="Invalid business type")
 
-    # Check if shop already exists
-    shops = db.collection("shops").where("merchant_uid", "==", body.merchant_uid).stream()
-    existing = [(doc.id, doc.to_dict()) for doc in shops]
+    with engine.connect() as conn:
+        existing = conn.execute(text("SELECT id FROM merchants WHERE user_id = :uid"), {"uid": body.merchant_uid}).fetchone()
+        
+        if existing:
+            conn.execute(text("""
+                UPDATE merchants 
+                SET shop_name = :name, business_type = :type, shop_address_line = :desc, shop_district = :dist, shop_latitude = :lat, shop_longitude = :lon
+                WHERE user_id = :uid
+            """), {
+                "name": body.shop_name,
+                "type": body.business_type,
+                "desc": body.description,
+                "dist": body.district,
+                "lat": body.lat,
+                "lon": body.lon,
+                "uid": body.merchant_uid
+            })
+            action = "updated"
+            shop_id = existing.id
+        else:
+            shop_id = str(uuid.uuid4())
+            conn.execute(text("""
+                INSERT INTO merchants (id, user_id, shop_name, business_type, shop_address_line, shop_district, shop_latitude, shop_longitude)
+                VALUES (:id, :uid, :name, :type, :desc, :dist, :lat, :lon)
+            """), {
+                "id": shop_id,
+                "uid": body.merchant_uid,
+                "name": body.shop_name,
+                "type": body.business_type,
+                "desc": body.description,
+                "dist": body.district,
+                "lat": body.lat,
+                "lon": body.lon
+            })
+            action = "created"
+        
+        conn.commit()
 
-    shop_data = {
-        "merchant_uid": body.merchant_uid,
-        "shop_name": body.shop_name,
-        "business_type": body.business_type,
-        "description": body.description,
-        "district": body.district,
-        "area": body.area,
-        "phone": body.phone,
-        "lat": body.lat,
-        "lon": body.lon,
-        "open_time": body.open_time,
-        "close_time": body.close_time,
-        "days_open": body.days_open,
-        "shop_image": body.shop_image,
-        "updated_at": datetime.datetime.utcnow().isoformat(),
-    }
-
-    if existing:
-        doc_id = existing[0][0]
-        db.collection("shops").document(doc_id).update(shop_data)
-        # Also update user record
-        db.collection("users").document(body.merchant_uid).update({
-            "shop_name": body.shop_name,
-            "business_type": body.business_type,
-            "district": body.district,
-        })
-        return {"success": True, "shop_id": doc_id, "action": "updated"}
-    else:
-        shop_data["created_at"] = datetime.datetime.utcnow().isoformat()
-        ref = db.collection("shops").document()
-        ref.set(shop_data)
-        db.collection("users").document(body.merchant_uid).update({
-            "shop_name": body.shop_name,
-            "business_type": body.business_type,
-            "district": body.district,
-        })
-        return {"success": True, "shop_id": ref.id, "action": "created"}
+    return {"success": True, "shop_id": shop_id, "action": action}
 
 
 # -- GET /merchant/business-types --------------------------------------------

@@ -1,5 +1,6 @@
 import networkx as nx
-from lib.firestore import db
+from sqlalchemy import text
+from lib.sql_connect import engine
 from datetime import datetime, timedelta
 from cachetools import TTLCache
 
@@ -10,20 +11,18 @@ bridge_cache   = TTLCache(maxsize=1,  ttl=60)   # 60s TTL
 
 
 def build_graph() -> nx.DiGraph:
-    """Fetch all edges from Firestore and build a NetworkX DiGraph."""
+    """Fetch all edges from SQL and build a NetworkX DiGraph."""
     G = nx.DiGraph()
-    if db is None:
-        return G
-    edges_ref = db.collection("edges").stream()
-    for doc in edges_ref:
-        e = doc.to_dict()
-        G.add_edge(
-            e["fromUserId"],
-            e["toUserId"],
-            weight=e.get("weight", 1.0),
-            type=e.get("type", "gig"),
-            createdAt=e.get("createdAt")
-        )
+    with engine.connect() as conn:
+        edges = conn.execute(text("SELECT from_user_id, to_user_id, type, weight, created_at FROM edges")).fetchall()
+        for e in edges:
+            G.add_edge(
+                e.from_user_id,
+                e.to_user_id,
+                weight=e.weight or 1.0,
+                type=e.type or "gig",
+                createdAt=e.created_at
+            )
     return G
 
 
@@ -54,7 +53,7 @@ def compute_trust_score(user_id: str) -> float:
     cutoff = datetime.utcnow() - timedelta(days=7)
     recent = sum(
         1 for _, _, data in G.edges(user_id, data=True)
-        if data.get("createdAt") and data["createdAt"].replace(tzinfo=None) > cutoff
+        if data.get("createdAt") and data["createdAt"] > cutoff
     )
     recent_score = min(recent / 10, 1.0)   # cap at 10 recent edges
 
@@ -65,11 +64,10 @@ def compute_trust_score(user_id: str) -> float:
     ]
     vouch_rate = min(len(employment_edges) / 5, 1.0) if employment_edges else 0.5
 
-    # Pull certificate trust weight from Firestore
-    user_doc = {}
-    if db is not None:
-        user_doc = db.collection("users").document(user_id).get().to_dict() or {}
-    cert_weight = user_doc.get("certTrustWeight", 0)   # 0.2 to 1.0
+    # Pull certificate trust weight from SQL
+    with engine.connect() as conn:
+        user = conn.execute(text("SELECT cert_trust_weight FROM users WHERE id = :id"), {"id": user_id}).fetchone()
+        cert_weight = float(user.cert_trust_weight) if user and user.cert_trust_weight else 0.0
 
     # Blend into final score: certificate boosts the ceiling
     base_score = (
@@ -84,6 +82,12 @@ def compute_trust_score(user_id: str) -> float:
 
     result = round(final_score, 1)
     trust_cache[user_id] = result
+    
+    # Update DB
+    with engine.connect() as conn:
+        conn.execute(text("UPDATE users SET trust_score = :score WHERE id = :id"), {"score": result, "id": user_id})
+        conn.commit()
+        
     return result
 
 
@@ -99,15 +103,16 @@ def get_cluster_velocity() -> dict:
     this_week_start = now - timedelta(days=7)
     last_week_start = now - timedelta(days=14)
 
-    edges = db.collection("edges").stream() if db is not None else []
+    with engine.connect() as conn:
+        edges = conn.execute(text("SELECT created_at FROM edges")).fetchall()
+        
     this_week = 0
     last_week = 0
 
-    for doc in edges:
-        created = doc.to_dict().get("createdAt")
+    for e in edges:
+        created = e.created_at
         if not created:
             continue
-        created = created.replace(tzinfo=None)
         if created > this_week_start:
             this_week += 1
         elif created > last_week_start:
@@ -127,10 +132,6 @@ def get_cluster_velocity() -> dict:
         "thisWeek":  this_week,
         "lastWeek":  last_week
     }
-
-    # Write to Firestore so frontend onSnapshot() picks it up
-    if db is not None:
-        db.collection("analytics").document("velocity").set(result)
 
     velocity_cache["velocity"] = result
     return result
@@ -167,10 +168,6 @@ def detect_bridge_nodes() -> list:
 
     results.sort(key=lambda x: x["disconnects"], reverse=True)
     top3 = results[:3]
-
-    # Write to Firestore for frontend
-    if db is not None:
-        db.collection("analytics").document("bridgeNodes").set({"nodes": top3})
 
     bridge_cache["bridges"] = top3
     return top3
