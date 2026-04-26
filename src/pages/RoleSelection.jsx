@@ -7,7 +7,13 @@ const RoleSelection = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleRoleSelect = async (role) => {
+    const handleRoleSelect = async (role) => {
+    // If it's a guest user, bypass the backend call
+    if (user?.id?.startsWith('guest_')) {
+      updateRole(role);
+      return;
+    }
+
     setIsSubmitting(true);
     setError(null);
     try {
