@@ -22,15 +22,6 @@ app.include_router(gigs.router,          prefix="/api")
 app.include_router(merchant.router,      prefix="/api")
 app.include_router(recruitment.router,   prefix="/api")
 
-@app.get("/")
-def root():
-    return {
-        "message": "Welcome to YuvaShakti API",
-        "status": "online",
-        "docs": "/docs",
-        "health": "/health"
-    }
-
 @app.get("/health")
 def health():
     return {"status": "ok"}
