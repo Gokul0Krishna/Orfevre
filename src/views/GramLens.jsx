@@ -177,6 +177,7 @@ const GramLens = () => {
   const [bridgeNodes, setBridgeNodes] = useState([]);
   const [graphData, setGraphData]   = useState({ nodes: [], edges: [] });
   const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(null);
   const [selectedNode, setSelectedNode] = useState(null);
   const [activeDistrict, setActiveDistrict] = useState('Mysuru');
   const graphRef = useRef(null);
@@ -194,6 +195,7 @@ const GramLens = () => {
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [statsRes, velRes, bridgeRes, graphRes] = await Promise.all([
         getClusterStats(activeDistrict),
@@ -207,6 +209,7 @@ const GramLens = () => {
       setGraphData(graphRes);
     } catch (err) {
       console.error('GramLens fetch failed:', err);
+      setError(err.message || 'Failed to sync network data');
     } finally {
       setLoading(false);
     }
@@ -312,7 +315,23 @@ const GramLens = () => {
               </div>
 
               {/* Real D3 Graph Layer */}
-              {!loading && graphData.nodes.length > 0 ? (
+              {loading ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm z-50">
+                  <div className="text-center">
+                    <RefreshCw className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-4" />
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Calculating Geometry...</p>
+                  </div>
+                </div>
+              ) : error ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm z-50">
+                  <div className="text-center p-8 bg-red-500/10 border border-red-500/20 rounded-3xl">
+                    <Info className="w-8 h-8 text-red-500 mx-auto mb-4" />
+                    <p className="text-sm font-bold text-red-400 mb-2">Sync Error</p>
+                    <p className="text-xs text-slate-500 max-w-xs">{error}</p>
+                    <button onClick={fetchAll} className="mt-4 px-4 py-2 bg-red-500 text-white text-[10px] font-black rounded-xl">RETRY SYNC</button>
+                  </div>
+                </div>
+              ) : graphData.nodes.length > 0 ? (
                 <ForceGraph
                   nodes={graphData.nodes}
                   edges={graphData.edges}
@@ -322,7 +341,10 @@ const GramLens = () => {
                 />
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center bg-slate-950/50 backdrop-blur-sm z-50">
-                  <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
+                  <div className="text-center">
+                    <Users className="w-8 h-8 text-slate-700 mx-auto mb-4" />
+                    <p className="text-xs font-bold text-slate-600 uppercase tracking-widest">No nodes found in {activeDistrict}</p>
+                  </div>
                 </div>
               )}
 
