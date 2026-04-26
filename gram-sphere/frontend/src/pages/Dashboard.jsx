@@ -11,6 +11,7 @@ import MyGigs from '../views/MyGigs';
 import MyShop from '../views/MyShop';
 import RecruitmentChat from '../views/RecruitmentChat';
 import DistrictSummary from '../views/DistrictSummary';
+import VerificationDashboard from '../views/VerificationDashboard';
 
 import { useAuth } from '../context/AuthContext';
 
@@ -33,45 +34,18 @@ const Dashboard = () => {
 
       {/* pt-16 pushes content below the fixed header */}
       <main className="flex-1 pt-16 relative overflow-auto">
-        {activeView === 'jobconnect'       && <JobConnect />}
-        {activeView === 'profile'          && <Profile />}
-        {activeView === 'youth_profile'    && <Profile />}
-        {activeView === 'bazaarpulse'      && <BazaarPulse />}
-        {activeView === 'gramlens'         && <GramLens />}
-        {activeView === 'applications'     && <ApplicationsView />}
-        {activeView === 'my_gigs'          && <MyGigs />}
-        {activeView === 'merchant_home'    && <MyShop />}
+        {activeView === 'jobconnect' && <JobConnect />}
+        {activeView === 'profile' && <Profile />}
+        {activeView === 'youth_profile' && <Profile />}
+        {activeView === 'bazaarpulse' && <BazaarPulse />}
+        {activeView === 'gramlens' && <GramLens />}
+        {activeView === 'applications' && <ApplicationsView />}
+        {activeView === 'my_gigs' && <MyGigs />}
+        {activeView === 'merchant_home' && <MyShop />}
         {activeView === 'recruitment_chat' && <RecruitmentChat />}
         {activeView === 'district_summary' && <DistrictSummary />}
+        {activeView === 'verification' && <VerificationDashboard />}
       </main>
-      <Sidebar 
-        isOpen={isSidebarOpen} 
-        onClose={() => setIsSidebarOpen(false)} 
-        activeView={activeView}
-        setActiveView={setActiveView}
-      />
-      
-      <div className="flex-1 flex flex-col min-w-0">
-        <Header onOpenSidebar={() => setIsSidebarOpen(true)} />
-        
-        <main className="flex-1 relative bg-[#FAFAFA] overflow-hidden">
-          {activeView === 'jobconnect' && <JobConnect />}
-          {activeView === 'profile' && <Profile />}
-          {activeView === 'bazaarpulse' && <BazaarPulse />}
-          {activeView === 'gramlens' && <GramLens />}
-          
-          {/* Mock empty states for other views */}
-          {activeView !== 'jobconnect' && 
-           activeView !== 'profile' && 
-           activeView !== 'bazaarpulse' && 
-           activeView !== 'gramlens' && (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-gray-500">This view is not implemented yet.</p>
-            </div>
-          )}
-        </main>
-      </div>
-
       {/* Navigation Chatbot Assistant */}
       <ChatbotWidget />
     </div>

@@ -1,25 +1,21 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from lib.firestore import db
-from lib.graph_engine import compute_trust_score
+from sqlalchemy import text
+from lib.sql_connect import engine
 from typing import Optional
-from google.oauth2 import id_token
-from google.auth.transport import requests
 import jwt
 import datetime
+import uuid
 
-CLIENT_ID = "1034819862300-t43c6ahbdrh628iigdh80po94vatmq0l.apps.googleusercontent.com"
 JWT_SECRET = "gramsphere_super_secret_key_change_in_prod"
 
 router = APIRouter()
 
-
 class UserUpdateRequest(BaseModel):
-    name:     Optional[str] = None
-    role:     Optional[str] = None
-    trade:    Optional[str] = None
-    district: Optional[str] = None
-    location: Optional[str] = None
+    full_name: Optional[str] = None
+    role:      Optional[str] = None
+    trade:     Optional[str] = None
+    district:  Optional[str] = None
 
 class GoogleAuthRequest(BaseModel):
     credential: str
@@ -45,42 +41,37 @@ async def google_auth(body: GoogleAuthRequest):
         email = idinfo['email']
         name = idinfo.get('name', '')
         picture = idinfo.get('picture', '')
-        google_id = idinfo['sub']
+        firebase_uid = idinfo['sub']
 
-        # Check if user exists in Firestore
-        users_ref = db.collection("users")
-        # Note: In a real production app we'd query by google_id or email
-        # For Firestore emulator/testing, let's fetch all and filter or use .where()
-        query = users_ref.where("email", "==", email).stream()
-        docs = list(query)
+        # Check if user exists in SQL
+        with engine.connect() as conn:
+            user = conn.execute(text("SELECT id, full_name, email, role FROM users WHERE email = :email"), {"email": email}).fetchone()
 
-        if len(docs) == 0:
-            # Create new user
-            new_user = {
-                "email": email,
-                "name": name,
-                "picture": picture,
-                "google_id": google_id,
-                "role": None,
-                "trade": "",
-                "district": "",
-                "trustScore": 50,
-                "skillTokens": 0
-            }
-            doc_ref = users_ref.document()
-            doc_ref.set(new_user)
-            user_id = doc_ref.id
-            user_data = new_user
-        else:
-            user_id = docs[0].id
-            user_data = docs[0].to_dict()
+            if not user:
+                # Create new user
+                user_id = str(uuid.uuid4())
+                conn.execute(text("""
+                    INSERT INTO users (id, firebase_uid, full_name, email, role, trust_score, skill_tokens, is_active)
+                    VALUES (:id, :f_uid, :name, :email, NULL, 50, 0, TRUE)
+                """), {
+                    "id": user_id,
+                    "f_uid": firebase_uid,
+                    "name": name,
+                    "email": email
+                })
+                conn.commit()
+                user_role = None
+            else:
+                user_id = user.id
+                user_role = user.role
+                name = user.full_name
 
         # Create session JWT
         payload = {
             "user_id": user_id,
             "email": email,
-            "name": user_data.get("name"),
-            "role": user_data.get("role"),
+            "name": name,
+            "role": user_role,
             "exp": datetime.datetime.utcnow() + datetime.timedelta(days=7)
         }
         token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
@@ -90,10 +81,10 @@ async def google_auth(body: GoogleAuthRequest):
             "token": token,
             "user": {
                 "id": user_id,
-                "name": user_data.get("name"),
-                "email": user_data.get("email"),
-                "picture": user_data.get("picture"),
-                "role": user_data.get("role")
+                "name": name,
+                "email": email,
+                "picture": picture,
+                "role": user_role
             }
         }
     except ValueError as e:
@@ -107,20 +98,19 @@ async def set_role(body: SetRoleRequest, user_id: str):
     if body.role not in ["youth", "merchant", "official"]:
         raise HTTPException(status_code=400, detail="Invalid role")
 
-    ref = db.collection("users").document(user_id)
-    snap = ref.get()
-    if not snap.exists:
-        raise HTTPException(status_code=404, detail="User not found")
+    with engine.connect() as conn:
+        user = conn.execute(text("SELECT email, full_name FROM users WHERE id = :id"), {"id": user_id}).fetchone()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
 
-    # Allowed overwriting role for testing purposes
-    user_data = snap.to_dict()
-    ref.update({"role": body.role})
+        conn.execute(text("UPDATE users SET role = :role WHERE id = :id"), {"role": body.role, "id": user_id})
+        conn.commit()
     
     # Generate new JWT with updated role
     payload = {
         "user_id": user_id,
-        "email": user_data.get("email"),
-        "name": user_data.get("name"),
+        "email": user.email,
+        "name": user.full_name,
         "role": body.role,
         "exp": datetime.datetime.utcnow() + datetime.timedelta(days=7)
     }
@@ -131,8 +121,8 @@ async def set_role(body: SetRoleRequest, user_id: str):
         "token": token,
         "user": {
             "id": user_id,
-            "name": user_data.get("name"),
-            "email": user_data.get("email"),
+            "name": user.full_name,
+            "email": user.email,
             "role": body.role
         }
     }
@@ -141,53 +131,41 @@ async def set_role(body: SetRoleRequest, user_id: str):
 # -- GET /user/{user_id} --------------------------------------------------
 @router.get("/user/{user_id}")
 async def get_user(user_id: str):
-    """Fetch a single user's profile from Firestore."""
-    snap = db.collection("users").document(user_id).get()
-    if not snap.exists:
+    """Fetch a single user's profile from SQL."""
+    with engine.connect() as conn:
+        user = conn.execute(text("""
+            SELECT u.*, s.skill_type as trade, s.proficiency_level 
+            FROM users u
+            LEFT JOIN user_skills s ON u.id = s.user_id AND s.is_primary_skill = TRUE
+            WHERE u.id = :id
+        """), {"id": user_id}).fetchone()
+    
+    if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user = snap.to_dict()
-    user["id"] = snap.id
-
-    # Attach live trust score
-    user["trustScore"] = compute_trust_score(user_id)
-
-    return user
+    return dict(user._mapping)
 
 
 # -- PUT /user/{user_id} --------------------------------------------------
 @router.put("/user/{user_id}")
 async def update_user(user_id: str, body: UserUpdateRequest):
-    """Update editable fields on a user document."""
-    ref = db.collection("users").document(user_id)
-    if not ref.get().exists:
-        raise HTTPException(status_code=404, detail="User not found")
-
+    """Update editable fields on a user record."""
     updates = {k: v for k, v in body.dict().items() if v is not None}
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
 
-    ref.update(updates)
-    return {"success": True, "updated": updates}
+    # Map frontend field names to SQL column names if different
+    sql_updates = []
+    params = {"id": user_id}
+    for k, v in updates.items():
+        col = k
+        if k == "district": col = "current_district"
+        sql_updates.append(f"{col} = :{k}")
+        params[k] = v
 
-
-# -- GET /gigs -------------------------------------------------------------
-@router.get("/gigs")
-async def list_gigs(category: Optional[str] = None):
-    """Return gigs from Firestore, optionally filtered by category (trade)."""
-    query = db.collection("gigs")
+    query = f"UPDATE users SET {', '.join(sql_updates)} WHERE id = :id"
+    with engine.connect() as conn:
+        conn.execute(text(query), params)
+        conn.commit()
     
-    if category:
-        # Simple case-insensitive match (start-of-string)
-        # Note: Firestore doesn't do case-insensitive search easily, 
-        # so we fetch and filter if needed or assume exact match for now.
-        docs = query.where("title", "==", category).stream()
-    else:
-        docs = query.stream()
-
-    gigs = []
-    for d in docs:
-        gig = d.to_dict()
-        gig["id"] = d.id
-        gigs.append(gig)
-    return {"gigs": gigs}
+    return {"success": True, "updated": updates}

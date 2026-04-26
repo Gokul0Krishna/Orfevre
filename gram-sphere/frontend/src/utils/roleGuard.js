@@ -1,7 +1,7 @@
 const ACCESS_MAP = {
   youth: [
     "jobconnect", "youth_profile", "my_gigs", "work_posts",
-    "notifications", "skill_tokens", "skill_demand"
+    "notifications", "skill_tokens", "skill_demand", "verification"
   ],
   merchant: [
     "merchant_home", "recruitment_chat", "post_gig", "applications",

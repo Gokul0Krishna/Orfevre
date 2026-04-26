@@ -1,8 +1,7 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from typing import Optional, List
-from sqlalchemy.orm import Session
 from sqlalchemy import text
-from lib.sql_connect import get_sql_session
+from lib.sql_connect import engine
 from lib.geo_validator import (
     extract_gps_from_image,
     extract_gps_from_video,
@@ -40,15 +39,15 @@ TRADE_SKILLS = {
 async def upload_work_evidence(
     user_id: str = Form(...),
     work_description: str = Form(...),
-    file: UploadFile = File(...),
-    db: Session = Depends(get_sql_session)
+    file: UploadFile = File(...)
 ):
     """
     Pipeline 1: Validates if the uploaded image matches the user's registered job.
     """
     # 1. Get user's job and registered city
-    user = db.execute(text("SELECT full_name, role, current_district, cert_tier FROM users WHERE id = :id"), {"id": user_id}).fetchone()
-    if not user:
+    with engine.connect() as conn:
+        user = conn.execute(text("SELECT full_name, role, current_district, cert_tier FROM users WHERE id = :id"), {"id": user_id}).fetchone()
+        if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
     # Get user's primary skill/trade

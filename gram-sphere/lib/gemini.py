@@ -2,14 +2,11 @@ from google import genai
 from google.genai import types
 import json
 import os
-import base64
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Initialize the client with the new SDK (google-genai)
-# This replaces the old genai.configure() pattern
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# Set Model ID
 MODEL_ID = "gemini-2.0-flash"
 
 async def call_gemini(prompt: str, media_bytes: list[bytes] = None, mime_type: str = "image/jpeg") -> dict:
@@ -17,7 +14,7 @@ async def call_gemini(prompt: str, media_bytes: list[bytes] = None, mime_type: s
     Unified function to call Gemini (supports text and images/videos).
     Uses the new google-genai client.
     """
-    # Reload .env every call so no backend restart is needed
+    # Reload .env every call if you truly need dynamic key switching
     env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
     load_dotenv(env_path, override=True)
 
@@ -25,23 +22,25 @@ async def call_gemini(prompt: str, media_bytes: list[bytes] = None, mime_type: s
     if not api_key:
         raise ValueError("GEMINI_API_KEY is not set in the .env file.")
 
+    # Initialize client inside the function to use the refreshed API key
     client = genai.Client(api_key=api_key)
 
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-        contents = [prompt]
-        if media_bytes:
-            for b in media_bytes:
-                contents.append(
-                    types.Part.from_bytes(
-                        data=b,
-                        mime_type=mime_type
-                    )
-                )
+    # 1. Build the contents list
+    # The first item is usually your text prompt
+    contents = [prompt]
 
-        # Generate response
+    # 2. Add media parts if they exist
+    if media_bytes:
+        for b in media_bytes:
+            contents.append(
+                types.Part.from_bytes(
+                    data=b,
+                    mime_type=mime_type
+                )
+            )
+
+    try:
+        # 3. Generate content
         response = client.models.generate_content(
             model=MODEL_ID,
             contents=contents,
@@ -50,16 +49,16 @@ async def call_gemini(prompt: str, media_bytes: list[bytes] = None, mime_type: s
                 temperature=0.3,
             ),
         )
+        
         text = response.text.strip()
 
         # Handle potential markdown fences in JSON response
+        # Note: With response_mime_type="application/json", 
+        # Gemini usually returns raw JSON without backticks.
         if text.startswith("```"):
-            parts = text.split("```")
-            text = parts[1] if len(parts) > 1 else parts[0]
-            if text.startswith("json"):
-                text = text[4:]
+            text = text.strip("`").replace("json", "", 1).strip()
 
-        return json.loads(text.strip())
+        return json.loads(text)
 
     except json.JSONDecodeError as e:
         return {

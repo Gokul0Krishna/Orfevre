@@ -11,7 +11,7 @@ SQL_FILE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__f
 
 def load_sql_queries():
     """Parses the SQL file and returns a dictionary of queries."""
-    with open(SQL_FILE_PATH, "r") as f:
+    with open(SQL_FILE_PATH, "r", encoding="utf-8") as f:
         content = f.read()
     
     queries = {}

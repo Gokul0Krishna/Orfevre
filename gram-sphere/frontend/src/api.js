@@ -169,6 +169,49 @@ export function postGig(data) {
   });
 }
 
+// ─── Verification & Trust Score ──────────────────────────────────────────
+export function uploadWorkEvidence(userId, workDescription, file) {
+  const formData = new FormData();
+  formData.append('user_id', userId);
+  formData.append('work_description', workDescription);
+  formData.append('file', file);
+
+  return fetch(`${API_BASE}/verify/upload-work`, {
+    method: 'POST',
+    body: formData,
+  }).then(res => {
+    if (!res.ok) throw new Error('Failed to upload work evidence');
+    return res.json();
+  });
+}
+
+export function getTradeSkills(trade) {
+  return request(`/verify/skills/${trade}`);
+}
+
+export function uploadSkillTask(userId, skillId, file) {
+  const formData = new FormData();
+  formData.append('user_id', userId);
+  formData.append('skill_id', skillId);
+  formData.append('file', file);
+
+  return fetch(`${API_BASE}/verify/upload-skill-task`, {
+    method: 'POST',
+    body: formData,
+  }).then(res => {
+    if (!res.ok) throw new Error('Failed to upload skill task');
+    return res.json();
+  });
+}
+
+export function getTrustScore(userId) {
+  return request(`/verify/trust-score/${userId}`);
+}
+
+export function getWorkHistory(userId) {
+  return request(`/verify/work-history/${userId}`);
+}
+
 // ─── Chatbot ───────────────────────────────────────────
 export function sendChatMessage(message, language = 'en') {
   return request('/chatbot', {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, LogOut, Home, Briefcase, Store, Map, BarChart2, Target } from 'lucide-react';
+import { Bell, LogOut, Home, Briefcase, Store, Map, BarChart2, Target, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { canAccess } from '../utils/roleGuard';
 
@@ -10,6 +10,8 @@ const ROLE_LABELS = {
 };
 
 const NAV_LINKS = [
+  { id: 'jobconnect',       label: 'JobConnect',    icon: Briefcase, roles: ['youth'] },
+  { id: 'verification',     label: 'Verification',  icon: ShieldCheck, roles: ['youth'] },
   { id: 'merchant_home',    label: 'My Shop',       icon: Store,    roles: ['merchant'] },
   { id: 'applications',     label: 'Applications',  icon: Briefcase, roles: ['merchant'] },
   { id: 'recruitment_chat', label: 'Recruit',       icon: Target,   roles: ['merchant'] },
@@ -19,7 +21,7 @@ const NAV_LINKS = [
 ];
 
 const AppHeader = ({ activeView, setActiveView }) => {
-  const { user, role, logout } = useAuth();
+  const { user, role, logout, updateRole } = useAuth();
   const [showMenu, setShowMenu] = React.useState(false);
   const [showNotifications, setShowNotifications] = React.useState(false);
 
@@ -32,7 +34,7 @@ const AppHeader = ({ activeView, setActiveView }) => {
         {/* Logo */}
         <div
           className="flex items-center gap-2 cursor-pointer"
-          onClick={() => setActiveView(links[0]?.id || 'merchant_home')}
+          onClick={() => setActiveView(links[0]?.id || 'jobconnect')}
         >
           <svg className="w-6 h-6 text-[#007B55]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
